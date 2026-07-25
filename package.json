@@ -20,12 +20,20 @@
     "url": "https://github.com/zhanglei1996/lan-library-reader/issues"
   },
   "private": true,
+  "files": [
+    "dist",
+    "server",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "tsc --noEmit && vite build",
+    "prepare": "npm run build",
     "start": "node server/index.mjs",
     "test": "node --test tests/*.test.mjs",
     "check": "npm run test && npm run build",

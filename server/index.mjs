@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createReadStream, rmSync } from "node:fs";
+import { createReadStream, realpathSync, rmSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import http from "node:http";
 import os from "node:os";
@@ -395,7 +395,16 @@ async function main() {
   console.log("运行 lan-reader stop 可一键停止全部书架。\n");
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+export function isDirectExecution(argvEntry = process.argv[1]) {
+  if (!argvEntry) return false;
+  try {
+    return realpathSync(argvEntry) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return import.meta.url === pathToFileURL(argvEntry).href;
+  }
+}
+
+if (isDirectExecution()) {
   main().catch((error) => {
     console.error(error.message);
     process.exitCode = 1;

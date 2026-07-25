@@ -58,30 +58,30 @@ Word/PPT 预览是可选能力。没有安装 LibreOffice 时，Markdown 和 PDF
 - npm
 - 可选：[LibreOffice](https://www.libreoffice.org/)，用于 Word/PPT 预览
 
-### 2. 安装并构建
+### 2. 安装命令
+
+只需安装一次：
 
 ```bash
-git clone https://github.com/zhanglei1996/lan-library-reader.git
-cd lan-library-reader
-npm install
-npm run build
+npm install -g github:zhanglei1996/lan-library-reader
 ```
 
-### 3. 启动书架
+### 3. 在文档目录启动
 
-指定一个文档文件夹：
+进入任何想要阅读的文件夹，直接运行：
 
 ```bash
-npm start -- "/Users/your-name/Documents/notes"
+cd "/Users/your-name/Documents/notes"
+lan-reader
 ```
 
-也可以读取当前文件夹：
+也可以不切换目录，直接把文件夹路径传给命令：
 
 ```bash
-npm start
+lan-reader "/Users/your-name/Documents/notes"
 ```
 
-成功启动后会显示类似地址：
+成功启动后，终端会明确显示可访问的地址和终止方式：
 
 ```text
 局域网书架已启动
@@ -115,25 +115,41 @@ npm start -- stop
 
 命令会向每个已登记的书架发送带随机密钥的本机停止请求，让服务正常退出并清理实例记录。它只停止 LAN Library Reader 进程，不会删除或修改书架中的文档。
 
-## 安装为全局命令
+## 更新和卸载
 
-在项目目录执行一次：
+重新运行安装命令即可更新到 GitHub 上的最新版本：
 
 ```bash
-npm link
+npm install -g github:zhanglei1996/lan-library-reader
 ```
 
-以后可以进入任意文档文件夹直接启动：
+卸载全局命令：
 
 ```bash
-cd "/Users/your-name/Documents/notes"
-lan-reader
+npm uninstall -g lan-library-reader
 ```
 
-也可以从任意位置指定书架目录：
+## 从源码运行
+
+如果要参与开发，可以克隆项目并安装依赖：
 
 ```bash
-lan-reader "/Users/your-name/Documents/notes"
+git clone https://github.com/zhanglei1996/lan-library-reader.git
+cd lan-library-reader
+npm install
+npm run build
+```
+
+读取当前文件夹：
+
+```bash
+npm start
+```
+
+读取指定文件夹：
+
+```bash
+npm start -- "/Users/your-name/Documents/notes"
 ```
 
 ## 命令参数
