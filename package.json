@@ -1,0 +1,59 @@
+{
+  "name": "lan-library-reader",
+  "version": "0.1.0",
+  "description": "A read-only LAN document reader for Markdown, PDF, Word and PowerPoint files.",
+  "license": "MIT",
+  "keywords": [
+    "markdown",
+    "pdf",
+    "document-viewer",
+    "lan",
+    "ebook",
+    "local-first"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhanglei1996/lan-library-reader.git"
+  },
+  "homepage": "https://github.com/zhanglei1996/lan-library-reader#readme",
+  "bugs": {
+    "url": "https://github.com/zhanglei1996/lan-library-reader/issues"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc --noEmit && vite build",
+    "start": "node server/index.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm run test && npm run build",
+    "lint": "eslint src server scripts tests"
+  },
+  "dependencies": {
+    "github-slugger": "^2.0.0",
+    "lucide-react": "^0.468.0",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "react-markdown": "^10.1.0",
+    "rehype-slug": "^6.0.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "eslint": "^10.8.0",
+    "globals": "^16.3.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.49.0",
+    "vite": "^8.1.5"
+  },
+  "type": "module",
+  "bin": {
+    "lan-reader": "./server/index.mjs"
+  }
+}
