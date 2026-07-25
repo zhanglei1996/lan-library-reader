@@ -63,7 +63,7 @@ Word/PPT 预览是可选能力。没有安装 LibreOffice 时，Markdown 和 PDF
 只需安装一次：
 
 ```bash
-npm install -g github:zhanglei1996/lan-library-reader
+npm install -g https://github.com/zhanglei1996/lan-library-reader/archive/refs/heads/main.tar.gz
 ```
 
 ### 3. 在文档目录启动
@@ -120,7 +120,7 @@ npm start -- stop
 重新运行安装命令即可更新到 GitHub 上的最新版本：
 
 ```bash
-npm install -g github:zhanglei1996/lan-library-reader
+npm install -g https://github.com/zhanglei1996/lan-library-reader/archive/refs/heads/main.tar.gz
 ```
 
 卸载全局命令：
