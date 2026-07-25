@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createReadStream } from "node:fs";
+import { createReadStream, rmSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import http from "node:http";
 import os from "node:os";
@@ -7,6 +7,13 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { HELP_TEXT, parseArguments } from "./cli.mjs";
 import { createLibreOfficeConverter } from "./converters/libreoffice.mjs";
+import {
+  createControlToken,
+  isValidControlToken,
+  registerInstance,
+  stopAllInstances,
+  unregisterInstance,
+} from "./instances.mjs";
 import {
   LibraryError,
   buildLibraryTree,
@@ -151,6 +158,8 @@ export async function createReaderServer({
   distDirectory = defaultDistDirectory,
   apiOnly = false,
   converter,
+  controlToken,
+  onStop,
 } = {}) {
   const library = await createLibrary(root);
   const officeConverter = converter ?? await createLibreOfficeConverter();
@@ -161,6 +170,24 @@ export async function createReaderServer({
       if (!request.url) throw new LibraryError("无效的请求");
       const url = new URL(request.url, "http://localhost");
       const isApi = url.pathname.startsWith("/api/");
+
+      if (url.pathname === "/api/control/stop") {
+        if (request.method !== "POST") {
+          response.setHeader("Allow", "POST");
+          sendJson(response, 405, { error: "停止接口只接受 POST 请求" });
+          return;
+        }
+        if (
+          typeof onStop !== "function"
+          || !isValidControlToken(request.headers.authorization, controlToken)
+        ) {
+          sendJson(response, 404, { error: "接口不存在" });
+          return;
+        }
+        sendJson(response, 202, { stopping: true });
+        setImmediate(() => onStop());
+        return;
+      }
 
       if (request.method !== "GET" && request.method !== "HEAD") {
         response.setHeader("Allow", "GET, HEAD");
@@ -276,9 +303,31 @@ export async function startReaderServer(options = {}) {
 }
 
 async function main() {
+  const rawArguments = process.argv.slice(2);
+  if (rawArguments[0] === "stop") {
+    const summary = await stopAllInstances();
+    if (summary.stopped === 0 && summary.stale === 0 && summary.failed.length === 0) {
+      console.log("当前没有运行中的局域网书架。");
+      return;
+    }
+    if (summary.stopped > 0) {
+      console.log(`已停止 ${summary.stopped} 个局域网书架。`);
+    }
+    if (summary.stale > 0) {
+      console.log(`已清理 ${summary.stale} 条失效的实例记录。`);
+    }
+    if (summary.failed.length > 0) {
+      for (const failure of summary.failed) {
+        console.error(`无法停止 ${failure.root}：${failure.reason}`);
+      }
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   let options;
   try {
-    options = parseArguments(process.argv.slice(2));
+    options = parseArguments(rawArguments);
   } catch (error) {
     console.error(error.message);
     console.error("\n运行 lan-reader --help 查看用法。");
@@ -299,11 +348,51 @@ async function main() {
     return;
   }
 
-  const result = await startReaderServer(options);
+  const controlToken = createControlToken();
+  let result;
+  let registration;
+  let stopping = false;
+
+  const shutdown = async () => {
+    if (stopping) return;
+    stopping = true;
+    try {
+      await unregisterInstance(registration?.filePath);
+    } catch (error) {
+      console.error(`清理实例记录失败：${error.message}`);
+    }
+    await new Promise((resolve) => result.server.close(resolve));
+    process.exit(0);
+  };
+
+  result = await startReaderServer({
+    ...options,
+    controlToken,
+    onStop: () => void shutdown(),
+  });
+  try {
+    registration = await registerInstance({
+      token: controlToken,
+      root: path.resolve(options.root),
+      host: result.host,
+      port: result.port,
+    });
+  } catch (error) {
+    result.server.close();
+    throw error;
+  }
+
+  process.once("SIGINT", () => void shutdown());
+  process.once("SIGTERM", () => void shutdown());
+  process.once("exit", () => {
+    if (registration?.filePath) rmSync(registration.filePath, { force: true });
+  });
+
   console.log("\n局域网书架已启动");
   console.log(`本机访问：http://localhost:${result.port}`);
   for (const url of result.urls) console.log(`局域网访问：${url}`);
-  console.log("按 Ctrl+C 停止服务。\n");
+  console.log("按 Ctrl+C 停止当前服务。");
+  console.log("运行 lan-reader stop 可一键停止全部书架。\n");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -38,6 +38,10 @@ export const HELP_TEXT = `
 用法：
   npm start -- [文件夹] [选项]
   lan-reader [文件夹] [选项]
+  lan-reader stop
+
+命令：
+  stop                  一键停止这台电脑上的全部书架服务
 
 选项：
   -r, --root <文件夹>   要阅读的文件夹，默认是当前目录

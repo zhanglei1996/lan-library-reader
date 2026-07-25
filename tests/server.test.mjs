@@ -82,6 +82,49 @@ test("rejects writes and unsafe paths", async (t) => {
   assert.equal(hiddenResponse.status, 403);
 });
 
+test("protects the graceful stop endpoint with a secret token", async (t) => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "lan-reader-control-"));
+  const root = path.join(workspace, "library");
+  await fs.mkdir(root);
+  await fs.writeFile(path.join(root, "notes.md"), "# Notes");
+  let resolveStopped;
+  const stopped = new Promise((resolve) => {
+    resolveStopped = resolve;
+  });
+  const token = "test-control-token";
+  const result = await startReaderServer({
+    root,
+    host: "127.0.0.1",
+    port: 0,
+    apiOnly: true,
+    converter: { id: "none", available: false },
+    controlToken: token,
+    onStop: resolveStopped,
+  });
+  t.after(async () => {
+    if (result.server.listening) {
+      await new Promise((resolve) => result.server.close(resolve));
+    }
+    await fs.rm(workspace, { recursive: true, force: true });
+  });
+
+  const endpoint = `http://127.0.0.1:${result.port}/api/control/stop`;
+  const unauthorized = await fetch(endpoint, { method: "POST" });
+  const wrongMethod = await fetch(endpoint, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const authorized = await fetch(endpoint, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  await stopped;
+
+  assert.equal(unauthorized.status, 404);
+  assert.equal(wrongMethod.status, 405);
+  assert.equal(authorized.status, 202);
+  assert.deepEqual(await authorized.json(), { stopping: true });
+});
+
 test("uses the Office converter extension when one is available", async (t) => {
   let convertedSource;
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "lan-reader-converter-"));
