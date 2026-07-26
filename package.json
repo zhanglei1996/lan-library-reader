@@ -1,6 +1,6 @@
 {
   "name": "lan-reader",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A read-only LAN document reader for Markdown, PDF, Word and PowerPoint files.",
   "license": "MIT",
   "keywords": [
