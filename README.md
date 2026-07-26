@@ -58,7 +58,80 @@ Word/PPT 预览是可选能力。没有安装 LibreOffice 时，Markdown 和 PDF
 - npm
 - 可选：[LibreOffice](https://www.libreoffice.org/)，用于 Word/PPT 预览
 
-### 2. 安装并构建
+### 2. 安装命令
+
+只需安装一次：
+
+```bash
+npm install -g https://github.com/zhanglei1996/lan-library-reader/archive/refs/heads/main.tar.gz
+```
+
+### 3. 在文档目录启动
+
+进入任何想要阅读的文件夹，直接运行：
+
+```bash
+cd "/Users/your-name/Documents/notes"
+lan-reader
+```
+
+也可以不切换目录，直接把文件夹路径传给命令：
+
+```bash
+lan-reader "/Users/your-name/Documents/notes"
+```
+
+成功启动后，终端会明确显示可访问的地址和终止方式：
+
+```text
+局域网书架已启动
+本机访问：http://localhost:8080
+局域网访问：http://192.168.1.20:8080
+按 Ctrl+C 停止当前服务。
+运行 lan-reader stop 可一键停止全部书架。
+```
+
+电脑可以打开本机地址。手机或平板连接同一个 Wi-Fi 后，打开局域网地址即可。
+
+## 停止服务
+
+停止当前终端启动的书架，在运行服务的终端窗口按：
+
+```text
+Ctrl + C
+```
+
+如果同时为多个文件夹启动了服务，可以在任意终端一键停止这台电脑上的全部书架：
+
+```bash
+lan-reader stop
+```
+
+尚未安装全局命令时，也可以在项目目录执行：
+
+```bash
+npm start -- stop
+```
+
+命令会向每个已登记的书架发送带随机密钥的本机停止请求，让服务正常退出并清理实例记录。它只停止 LAN Library Reader 进程，不会删除或修改书架中的文档。
+
+## 更新和卸载
+
+重新运行安装命令即可更新到 GitHub 上的最新版本：
+
+```bash
+npm install -g https://github.com/zhanglei1996/lan-library-reader/archive/refs/heads/main.tar.gz
+```
+
+卸载全局命令：
+
+```bash
+npm uninstall -g lan-library-reader
+```
+
+## 从源码运行
+
+如果要参与开发，可以克隆项目并安装依赖：
 
 ```bash
 git clone https://github.com/zhanglei1996/lan-library-reader.git
@@ -67,55 +140,26 @@ npm install
 npm run build
 ```
 
-### 3. 启动书架
-
-指定一个文档文件夹：
-
-```bash
-npm start -- "/Users/your-name/Documents/notes"
-```
-
-也可以读取当前文件夹：
+读取当前文件夹：
 
 ```bash
 npm start
 ```
 
-成功启动后会显示类似地址：
-
-```text
-局域网书架已启动
-本机访问：http://localhost:8080
-局域网访问：http://192.168.1.20:8080
-```
-
-电脑可以打开本机地址。手机或平板连接同一个 Wi-Fi 后，打开局域网地址即可。
-
-## 安装为全局命令
-
-在项目目录执行一次：
+读取指定文件夹：
 
 ```bash
-npm link
-```
-
-以后可以进入任意文档文件夹直接启动：
-
-```bash
-cd "/Users/your-name/Documents/notes"
-lan-reader
-```
-
-也可以从任意位置指定书架目录：
-
-```bash
-lan-reader "/Users/your-name/Documents/notes"
+npm start -- "/Users/your-name/Documents/notes"
 ```
 
 ## 命令参数
 
 ```text
 lan-reader [文件夹] [选项]
+lan-reader stop
+
+命令：
+stop                    一键停止这台电脑上的全部书架
 
 -r, --root <文件夹>   要阅读的文件夹，默认是当前目录
 -p, --port <端口>     服务端口，默认 8080
@@ -156,7 +200,7 @@ LIBREOFFICE_PATH="/path/to/soffice" lan-reader
 - 公共 Wi-Fi 环境下不建议启动服务
 - macOS 或 Windows 首次询问网络权限时，只允许需要的局域网访问
 
-服务端只接受 `GET` 和 `HEAD` 请求。隐藏文件不会出现在目录中，也不能通过网址读取；指向书架外部的符号链接同样会被拒绝。
+所有文档接口只接受 `GET` 和 `HEAD` 请求。唯一的 `POST` 接口用于服务生命周期控制，由每个实例的随机密钥保护，只供 `lan-reader stop` 调用。隐藏文件不会出现在目录中，也不能通过网址读取；指向书架外部的符号链接同样会被拒绝。
 
 更多安全说明见 [SECURITY.md](SECURITY.md)。
 

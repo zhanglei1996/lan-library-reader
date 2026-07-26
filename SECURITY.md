@@ -17,6 +17,9 @@ LAN Library Reader is designed for trusted local networks. It does not provide
 authentication or transport encryption. Do not expose its port directly to the
 public internet or run it on an untrusted public Wi-Fi network.
 
-The server is intentionally read-only and restricts access to the selected
-library root. It blocks non-read HTTP methods, hidden files, path traversal,
-and symbolic links that resolve outside the library.
+The document API is intentionally read-only and restricts access to the
+selected library root. It blocks hidden files, path traversal, and symbolic
+links that resolve outside the library. The only state-changing endpoint
+gracefully stops the running server; it requires a per-instance random secret
+stored in a user-only local registration file and is used by the
+`lan-reader stop` command.
