@@ -1,5 +1,5 @@
 {
-  "name": "lan-library-reader",
+  "name": "lan-reader",
   "version": "0.1.0",
   "description": "A read-only LAN document reader for Markdown, PDF, Word and PowerPoint files.",
   "license": "MIT",
@@ -19,13 +19,17 @@
   "bugs": {
     "url": "https://github.com/zhanglei1996/lan-library-reader/issues"
   },
-  "private": true,
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "files": [
     "dist",
     "server",
     "README.md",
     "LICENSE",
-    "SECURITY.md"
+    "SECURITY.md",
+    "RELEASING.md"
   ],
   "engines": {
     "node": ">=22.13.0"
@@ -33,20 +37,14 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "tsc --noEmit && vite build",
-    "prepare": "node -e \"require('node:fs').accessSync('dist/index.html')\"",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run release:check",
     "start": "node server/index.mjs",
     "test": "node --test tests/*.test.mjs",
     "check": "npm run test && npm run build",
-    "lint": "eslint src server scripts tests"
-  },
-  "dependencies": {
-    "github-slugger": "^2.0.0",
-    "lucide-react": "^0.468.0",
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
-    "react-markdown": "^10.1.0",
-    "rehype-slug": "^6.0.0",
-    "remark-gfm": "^4.0.1"
+    "lint": "eslint src server scripts tests",
+    "release:check": "npm run test && npm run lint && npm audit --omit=dev --audit-level=high",
+    "release": "node scripts/release.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -55,7 +53,14 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
     "eslint": "^10.8.0",
+    "github-slugger": "^2.0.0",
     "globals": "^16.3.0",
+    "lucide-react": "^0.468.0",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "react-markdown": "^10.1.0",
+    "rehype-slug": "^6.0.0",
+    "remark-gfm": "^4.0.1",
     "typescript": "5.9.3",
     "typescript-eslint": "^8.49.0",
     "vite": "^8.1.5"

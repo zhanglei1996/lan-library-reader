@@ -1,6 +1,7 @@
 # LAN Library Reader · 局域网书架
 
 [![CI](https://github.com/zhanglei1996/lan-library-reader/actions/workflows/ci.yml/badge.svg)](https://github.com/zhanglei1996/lan-library-reader/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/lan-reader.svg)](https://www.npmjs.com/package/lan-reader)
 [![License: MIT](https://img.shields.io/badge/License-MIT-c95735.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.13-4e6a55.svg)](https://nodejs.org/)
 
@@ -63,7 +64,7 @@ Word/PPT 预览是可选能力。没有安装 LibreOffice 时，Markdown 和 PDF
 只需安装一次：
 
 ```bash
-npm install -g https://github.com/zhanglei1996/lan-library-reader/archive/refs/heads/main.tar.gz
+npm install -g lan-reader
 ```
 
 ### 3. 在文档目录启动
@@ -120,13 +121,13 @@ npm start -- stop
 重新运行安装命令即可更新到 GitHub 上的最新版本：
 
 ```bash
-npm install -g https://github.com/zhanglei1996/lan-library-reader/archive/refs/heads/main.tar.gz
+npm install -g lan-reader@latest
 ```
 
 卸载全局命令：
 
 ```bash
-npm uninstall -g lan-library-reader
+npm uninstall -g lan-reader
 ```
 
 ## 从源码运行
@@ -265,6 +266,8 @@ npm audit
 npm run check
 npm run lint
 ```
+
+项目维护者的 npm 发版流程见 [RELEASING.md](RELEASING.md)。
 
 ## 开源许可
 
