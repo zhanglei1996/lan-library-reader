@@ -1,6 +1,6 @@
 {
   "name": "lan-reader",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A read-only LAN document reader for Markdown, PDF, Word and PowerPoint files.",
   "license": "MIT",
   "keywords": [
@@ -13,7 +13,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/zhanglei1996/lan-library-reader.git"
+    "url": "git+https://github.com/zhanglei1996/lan-library-reader.git"
   },
   "homepage": "https://github.com/zhanglei1996/lan-library-reader#readme",
   "bugs": {
@@ -67,6 +67,6 @@
   },
   "type": "module",
   "bin": {
-    "lan-reader": "./server/index.mjs"
+    "lan-reader": "server/index.mjs"
   }
 }
