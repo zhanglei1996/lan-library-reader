@@ -36,7 +36,6 @@ export const HELP_TEXT = `
 局域网书架
 
 用法：
-  npm start -- [文件夹] [选项]
   lan-reader [文件夹] [选项]
   lan-reader stop
 
