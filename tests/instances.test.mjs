@@ -5,8 +5,10 @@ import path from "node:path";
 import test from "node:test";
 import {
   createControlToken,
+  listInstances,
   registerInstance,
   stopAllInstances,
+  stopInstances,
 } from "../server/instances.mjs";
 import { startReaderServer } from "../server/index.mjs";
 
@@ -64,10 +66,20 @@ test("stops every registered reader instance with one command", async (t) => {
     );
   }
 
+  const listed = await listInstances({ registryDirectory });
+  assert.equal(listed.length, 2);
+  assert.equal(listed.every((instance) => instance.status === "running"), true);
+
+  const targeted = await stopInstances({
+    registryDirectory,
+    target: listed[0].port,
+  });
+  assert.deepEqual(targeted, { stopped: 1, stale: 0, failed: [] });
+
   const summary = await stopAllInstances({ registryDirectory });
   await Promise.all(stoppedPromises);
 
-  assert.deepEqual(summary, { stopped: 2, stale: 0, failed: [] });
+  assert.deepEqual(summary, { stopped: 1, stale: 0, failed: [] });
   await assert.rejects(fs.access(registryDirectory), { code: "ENOENT" });
   assert.equal(servers.every((server) => !server.listening), true);
 });

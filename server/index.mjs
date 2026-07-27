@@ -5,22 +5,29 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createAccessController, createReadableAccessCode } from "./auth.mjs";
 import { HELP_TEXT, parseArguments } from "./cli.mjs";
+import { publicReaderConfig } from "./config.mjs";
 import { createLibreOfficeConverter } from "./converters/libreoffice.mjs";
 import {
   createControlToken,
   isValidControlToken,
+  listInstances,
   registerInstance,
   stopAllInstances,
+  stopInstances,
   unregisterInstance,
 } from "./instances.mjs";
 import {
   LibraryError,
-  buildLibraryTree,
   createLibrary,
   getLibraryFile,
+  kindForFile,
   readMarkdown,
+  readText,
 } from "./library.mjs";
+import { createLibraryScanner } from "./scanner.mjs";
+import { searchLibrary } from "./search.mjs";
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const defaultDistDirectory = path.resolve(moduleDirectory, "../dist");
@@ -46,6 +53,18 @@ const MIME_TYPES = new Map([
   [".svg", "image/svg+xml"],
   [".ico", "image/x-icon"],
   [".woff2", "font/woff2"],
+]);
+const SAFE_ASSET_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".avif",
+  ".bmp",
+  ".svg",
+  ".ico",
+  ".woff2",
 ]);
 
 function setSecurityHeaders(response, { file = false } = {}) {
@@ -85,13 +104,29 @@ function contentDisposition(name, type = "inline") {
   return `${type}; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
 
-function streamFile(request, response, file, { name, contentType, cache = "no-store" }) {
+function streamFile(
+  request,
+  response,
+  file,
+  {
+    name,
+    contentType,
+    cache = "no-store",
+    disposition = "inline",
+  },
+) {
+  function pipe(options) {
+    const stream = createReadStream(file.absolutePath, options);
+    stream.once("error", () => response.destroy());
+    stream.pipe(response);
+  }
+
   const total = file.stats.size;
   const range = request.headers.range;
   response.setHeader("Accept-Ranges", "bytes");
   response.setHeader("Cache-Control", cache);
   response.setHeader("Content-Type", contentType);
-  if (name) response.setHeader("Content-Disposition", contentDisposition(name));
+  if (name) response.setHeader("Content-Disposition", contentDisposition(name, disposition));
 
   if (range) {
     const match = /^bytes=(\d*)-(\d*)$/.exec(range);
@@ -100,8 +135,16 @@ function streamFile(request, response, file, { name, contentType, cache = "no-st
       response.end();
       return;
     }
-    const start = match[1] ? Number(match[1]) : 0;
-    const end = match[2] ? Number(match[2]) : total - 1;
+    let start;
+    let end;
+    if (!match[1] && match[2]) {
+      const suffixLength = Number(match[2]);
+      start = Math.max(0, total - suffixLength);
+      end = total - 1;
+    } else {
+      start = Number(match[1]);
+      end = match[2] ? Number(match[2]) : total - 1;
+    }
     if (start > end || end >= total) {
       response.writeHead(416, { "Content-Range": `bytes */${total}` });
       response.end();
@@ -112,13 +155,28 @@ function streamFile(request, response, file, { name, contentType, cache = "no-st
       "Content-Length": end - start + 1,
     });
     if (request.method === "HEAD") response.end();
-    else createReadStream(file.absolutePath, { start, end }).pipe(response);
+    else pipe({ start, end });
     return;
   }
 
   response.writeHead(200, { "Content-Length": total });
   if (request.method === "HEAD") response.end();
-  else createReadStream(file.absolutePath).pipe(response);
+  else pipe();
+}
+
+async function readJsonBody(request, maxBytes = 4 * 1024) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of request) {
+    total += chunk.length;
+    if (total > maxBytes) throw new LibraryError("请求内容过大", 413);
+    chunks.push(chunk);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+  } catch {
+    throw new LibraryError("请求内容必须是有效 JSON");
+  }
 }
 
 async function serveStatic(request, response, url, distDirectory) {
@@ -158,13 +216,37 @@ export async function createReaderServer({
   distDirectory = defaultDistDirectory,
   apiOnly = false,
   converter,
+  scanOptions,
+  accessCode = process.env.LAN_READER_ACCESS_CODE,
   controlToken,
   onStop,
 } = {}) {
   const library = await createLibrary(root);
   const officeConverter = converter ?? await createLibreOfficeConverter();
+  const scanner = createLibraryScanner(library, scanOptions);
+  const access = createAccessController(accessCode);
+  const eventResponses = new Set();
 
-  return http.createServer(async (request, response) => {
+  function libraryInfo(snapshot) {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    return {
+      name: snapshot.config.title || library.name,
+      documentCount: snapshot.documentCount,
+      scan: snapshot.scan,
+      revision: snapshot.revision,
+      accessUrls: port ? localAddresses(port) : [],
+      config: publicReaderConfig(snapshot.config),
+      capabilities: {
+        officePreview: officeConverter.available,
+        officeProvider: officeConverter.available ? officeConverter.id : null,
+        autoRefresh: scanner.watching,
+        authentication: access.enabled,
+      },
+    };
+  }
+
+  const server = http.createServer(async (request, response) => {
     setSecurityHeaders(response);
     try {
       if (!request.url) throw new LibraryError("无效的请求");
@@ -189,6 +271,56 @@ export async function createReaderServer({
         return;
       }
 
+      if (url.pathname === "/api/auth/status") {
+        sendJson(response, 200, {
+          required: access.enabled,
+          authenticated: access.isAuthenticated(request),
+        });
+        return;
+      }
+
+      if (url.pathname === "/api/auth/login") {
+        if (request.method !== "POST") {
+          response.setHeader("Allow", "POST");
+          sendJson(response, 405, { error: "登录接口只接受 POST 请求" });
+          return;
+        }
+        const payload = await readJsonBody(request);
+        const result = access.login(request, payload.code);
+        if (result.rateLimited) {
+          response.setHeader("Retry-After", String(result.retryAfterSeconds));
+          sendJson(response, 429, { error: "尝试次数过多，请稍后再试" });
+          return;
+        }
+        if (!result.ok) {
+          sendJson(response, 401, { error: "访问码错误" });
+          return;
+        }
+        if (result.cookie) response.setHeader("Set-Cookie", result.cookie);
+        sendJson(response, 200, { authenticated: true });
+        return;
+      }
+
+      if (url.pathname === "/api/auth/logout") {
+        if (request.method !== "POST") {
+          response.setHeader("Allow", "POST");
+          sendJson(response, 405, { error: "退出接口只接受 POST 请求" });
+          return;
+        }
+        response.setHeader("Set-Cookie", access.logout(request));
+        sendJson(response, 200, { authenticated: false });
+        return;
+      }
+
+      if (
+        isApi
+        && url.pathname !== "/api/health"
+        && !access.isAuthenticated(request)
+      ) {
+        sendJson(response, 401, { error: "需要输入访问码", code: "AUTH_REQUIRED" });
+        return;
+      }
+
       if (request.method !== "GET" && request.method !== "HEAD") {
         response.setHeader("Allow", "GET, HEAD");
         sendJson(response, 405, { error: "此服务为只读模式" });
@@ -200,38 +332,102 @@ export async function createReaderServer({
         return;
       }
 
-      if (url.pathname === "/api/library") {
-        const { documentCount } = await buildLibraryTree(library);
-        sendJson(response, 200, {
-          name: library.name,
-          documentCount,
-          capabilities: {
-            officePreview: officeConverter.available,
-            officeProvider: officeConverter.available ? officeConverter.id : null,
-          },
+      if (url.pathname === "/api/events") {
+        response.writeHead(200, {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-store",
+          Connection: "keep-alive",
+        });
+        eventResponses.add(response);
+        response.write(`event: ready\ndata: ${JSON.stringify({ revision: 0 })}\n\n`);
+        const unsubscribe = scanner.subscribe((revision) => {
+          response.write(`event: library-change\ndata: ${JSON.stringify({ revision })}\n\n`);
+        });
+        request.once("close", () => {
+          eventResponses.delete(response);
+          unsubscribe();
         });
         return;
       }
 
+      if (url.pathname === "/api/snapshot") {
+        const scanResult = await scanner.snapshot({
+          refresh: url.searchParams.get("refresh") === "1",
+        });
+        sendJson(response, 200, {
+          tree: scanResult.tree,
+          info: libraryInfo(scanResult),
+        });
+        return;
+      }
+
+      if (url.pathname === "/api/library") {
+        const scanResult = await scanner.snapshot();
+        sendJson(response, 200, libraryInfo(scanResult));
+        return;
+      }
+
       if (url.pathname === "/api/tree") {
-        const { tree } = await buildLibraryTree(library);
-        sendJson(response, 200, tree);
+        const scanResult = await scanner.snapshot();
+        sendJson(response, 200, scanResult.tree);
         return;
       }
 
       if (url.pathname === "/api/markdown") {
-        const document = await readMarkdown(library, url.searchParams.get("path") ?? "");
+        const snapshot = await scanner.snapshot();
+        const document = await readMarkdown(
+          library,
+          url.searchParams.get("path") ?? "",
+          { maxBytes: snapshot.config.textPreview.maxBytes },
+        );
         sendJson(response, 200, document);
         return;
       }
 
+      if (url.pathname === "/api/text") {
+        const snapshot = await scanner.snapshot();
+        const document = await readText(
+          library,
+          url.searchParams.get("path") ?? "",
+          {
+            maxBytes: snapshot.config.textPreview.maxBytes,
+            textExtensions: snapshot.config.textPreview.extensions,
+          },
+        );
+        sendJson(response, 200, document);
+        return;
+      }
+
+      if (url.pathname === "/api/search") {
+        const snapshot = await scanner.snapshot();
+        if (!snapshot.config.features.fullTextSearch) {
+          throw new LibraryError("全文搜索已在书架配置中关闭", 403);
+        }
+        const result = await searchLibrary(
+          library,
+          snapshot,
+          url.searchParams.get("q") ?? "",
+        );
+        sendJson(response, 200, result);
+        return;
+      }
+
       if (url.pathname === "/api/file") {
+        const snapshot = await scanner.snapshot();
         const file = await getLibraryFile(library, url.searchParams.get("path") ?? "");
+        const extension = path.extname(file.name).toLocaleLowerCase();
+        const listedKind = kindForFile(file.name, {
+          textExtensions: snapshot.config.textPreview.extensions,
+        });
+        if (!listedKind && !SAFE_ASSET_EXTENSIONS.has(extension)) {
+          throw new LibraryError("该文件未配置为可访问文档", 415);
+        }
         setSecurityHeaders(response, { file: true });
         streamFile(request, response, file, {
           name: file.name,
           contentType: MIME_TYPES.get(path.extname(file.name).toLocaleLowerCase())
             ?? "application/octet-stream",
+          disposition: url.searchParams.get("download") === "1" ? "attachment" : "inline",
         });
         return;
       }
@@ -275,6 +471,13 @@ export async function createReaderServer({
       if (!(error instanceof LibraryError)) console.error(error);
     }
   });
+  server.closeReaderEvents = () => {
+    for (const response of eventResponses) response.end();
+    eventResponses.clear();
+  };
+  server.disposeReaderResources = () => scanner.close();
+  server.once("close", server.disposeReaderResources);
+  return server;
 }
 
 function localAddresses(port) {
@@ -289,23 +492,97 @@ function localAddresses(port) {
   return addresses;
 }
 
+function listenOnPort(server, port, host) {
+  return new Promise((resolve, reject) => {
+    const handleError = (error) => {
+      server.off("listening", handleListening);
+      reject(error);
+    };
+    const handleListening = () => {
+      server.off("error", handleError);
+      resolve();
+    };
+    server.once("error", handleError);
+    server.once("listening", handleListening);
+    server.listen(port, host);
+  });
+}
+
 export async function startReaderServer(options = {}) {
   const server = await createReaderServer(options);
   const host = options.host ?? "0.0.0.0";
   const requestedPort = options.port ?? 8080;
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(requestedPort, host, resolve);
-  });
+  const maxPortAttempts = Number.isInteger(options.maxPortAttempts)
+    && options.maxPortAttempts > 0
+    ? options.maxPortAttempts
+    : 100;
+  let candidatePort = requestedPort;
+
+  for (let attempt = 0; attempt < maxPortAttempts; attempt += 1) {
+    try {
+      await listenOnPort(server, candidatePort, host);
+      break;
+    } catch (error) {
+      const canTryNext = error.code === "EADDRINUSE"
+        && requestedPort !== 0
+        && candidatePort < 65535
+        && attempt + 1 < maxPortAttempts;
+      if (canTryNext) {
+        candidatePort += 1;
+        continue;
+      }
+      if (error.code === "EADDRINUSE" && requestedPort !== 0) {
+        server.closeReaderEvents?.();
+        server.disposeReaderResources?.();
+        throw new Error(
+          `端口 ${requestedPort} 到 ${candidatePort} 均被占用，请指定其他端口`,
+          { cause: error },
+        );
+      }
+      server.closeReaderEvents?.();
+      server.disposeReaderResources?.();
+      throw error;
+    }
+  }
+
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : requestedPort;
-  return { server, host, port, urls: localAddresses(port) };
+  return {
+    server,
+    host,
+    port,
+    requestedPort,
+    portAdjusted: requestedPort !== 0 && port !== requestedPort,
+    urls: localAddresses(port),
+  };
 }
 
 async function main() {
   const rawArguments = process.argv.slice(2);
+  if (rawArguments[0] === "list") {
+    const instances = await listInstances();
+    if (instances.length === 0) {
+      console.log("当前没有运行中的局域网书架。");
+      return;
+    }
+    console.log("运行中的局域网书架：");
+    for (const instance of instances) {
+      console.log(
+        `- ${instance.root}  http://localhost:${instance.port}  ${instance.startedAt ?? ""}`,
+      );
+    }
+    return;
+  }
   if (rawArguments[0] === "stop") {
-    const summary = await stopAllInstances();
+    if (rawArguments.length > 2) {
+      console.error("stop 命令最多接受一个端口或文件夹");
+      process.exitCode = 1;
+      return;
+    }
+    const target = rawArguments[1];
+    const summary = target
+      ? await stopInstances({ target })
+      : await stopAllInstances();
     if (summary.stopped === 0 && summary.stale === 0 && summary.failed.length === 0) {
       console.log("当前没有运行中的局域网书架。");
       return;
@@ -349,6 +626,8 @@ async function main() {
   }
 
   const controlToken = createControlToken();
+  const generatedAccessCode = options.protect ? createReadableAccessCode() : null;
+  const accessCode = generatedAccessCode ?? process.env.LAN_READER_ACCESS_CODE;
   let result;
   let registration;
   let stopping = false;
@@ -361,12 +640,14 @@ async function main() {
     } catch (error) {
       console.error(`清理实例记录失败：${error.message}`);
     }
+    result.server.closeReaderEvents?.();
     await new Promise((resolve) => result.server.close(resolve));
     process.exit(0);
   };
 
   result = await startReaderServer({
     ...options,
+    accessCode,
     controlToken,
     onStop: () => void shutdown(),
   });
@@ -389,6 +670,14 @@ async function main() {
   });
 
   console.log("\n局域网书架已启动");
+  if (accessCode) {
+    console.log(
+      `访问保护：已启用${generatedAccessCode ? `，临时访问码 ${generatedAccessCode}` : ""}`,
+    );
+  }
+  if (result.portAdjusted) {
+    console.log(`端口 ${result.requestedPort} 已被占用，已自动使用 ${result.port}。`);
+  }
   console.log(`本机访问：http://localhost:${result.port}`);
   for (const url of result.urls) console.log(`局域网访问：${url}`);
   console.log("按 Ctrl+C 停止当前服务。");

@@ -3,6 +3,7 @@ export function parseArguments(argv, defaults = {}) {
     root: defaults.root ?? process.cwd(),
     host: defaults.host ?? "0.0.0.0",
     port: defaults.port ?? 8080,
+    protect: defaults.protect ?? false,
     help: false,
   };
   const positional = [];
@@ -17,6 +18,8 @@ export function parseArguments(argv, defaults = {}) {
       options.port = Number(argv[++index]);
     } else if (argument === "--host") {
       options.host = argv[++index];
+    } else if (argument === "--protect") {
+      options.protect = true;
     } else if (argument.startsWith("-")) {
       throw new Error(`未知参数：${argument}`);
     } else {
@@ -37,14 +40,17 @@ export const HELP_TEXT = `
 
 用法：
   lan-reader [文件夹] [选项]
-  lan-reader stop
+  lan-reader list
+  lan-reader stop [端口或文件夹]
 
 命令：
-  stop                  一键停止这台电脑上的全部书架服务
+  list                  显示这台电脑上运行中的书架
+  stop                  停止全部书架，或按端口/文件夹停止一个书架
 
 选项：
   -r, --root <文件夹>   要阅读的文件夹，默认是当前目录
-  -p, --port <端口>     服务端口，默认 8080
+  -p, --port <端口>     起始端口，默认 8080；被占用时自动递增
       --host <地址>     监听地址，默认 0.0.0.0
+      --protect         生成临时访问码保护书架
   -h, --help            显示帮助
 `.trim();

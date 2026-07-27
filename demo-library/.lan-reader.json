@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "title": "LAN Reader 示例书架",
+  "textPreview": {
+    "extensions": [".js"],
+    "lineNumbers": true,
+    "wrap": true,
+    "syntaxHighlight": true
+  }
+}

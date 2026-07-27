@@ -86,37 +86,111 @@ function requestStop(instance, timeoutMs) {
   });
 }
 
+function requestHealth(instance, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const request = http.get(
+      {
+        host: controlHost(instance.host),
+        port: instance.port,
+        path: "/api/health",
+        headers: { Connection: "close" },
+      },
+      (response) => {
+        response.resume();
+        response.once("end", () => {
+          if (response.statusCode === 200) resolve();
+          else reject(new Error(`健康检查返回状态 ${response.statusCode}`));
+        });
+      },
+    );
+    request.setTimeout(timeoutMs, () => {
+      request.destroy(Object.assign(new Error("健康检查超时"), { code: "ETIMEDOUT" }));
+    });
+    request.once("error", reject);
+  });
+}
+
 function isStaleInstanceError(error) {
   return ["ECONNREFUSED", "EHOSTUNREACH", "ENETUNREACH"]
     .includes(error?.code);
 }
 
-export async function stopAllInstances({
-  registryDirectory = DEFAULT_INSTANCE_DIRECTORY,
-  timeoutMs = 2_000,
-} = {}) {
-  let names;
+async function registrationNames(registryDirectory) {
   try {
-    names = await fs.readdir(registryDirectory);
+    return (await fs.readdir(registryDirectory)).filter((name) => name.endsWith(".json"));
   } catch (error) {
-    if (error.code === "ENOENT") return { stopped: 0, stale: 0, failed: [] };
+    if (error.code === "ENOENT") return [];
     throw error;
   }
+}
 
-  const registrations = names.filter((name) => name.endsWith(".json"));
+async function readRegistration(filePath) {
+  const instance = JSON.parse(await fs.readFile(filePath, "utf8"));
+  if (
+    typeof instance.host !== "string"
+    || !Number.isInteger(instance.port)
+    || typeof instance.token !== "string"
+    || typeof instance.root !== "string"
+  ) {
+    throw Object.assign(new Error("实例登记文件无效"), { code: "ESTALE" });
+  }
+  return instance;
+}
+
+export async function listInstances({
+  registryDirectory = DEFAULT_INSTANCE_DIRECTORY,
+  timeoutMs = 1_000,
+} = {}) {
+  const names = await registrationNames(registryDirectory);
+  const instances = [];
+  await Promise.all(names.map(async (name) => {
+    const filePath = path.join(registryDirectory, name);
+    try {
+      const instance = await readRegistration(filePath);
+      await requestHealth(instance, timeoutMs);
+      instances.push({ ...instance, status: "running" });
+    } catch (error) {
+      if (
+        error.code === "ENOENT"
+        || error.code === "ESTALE"
+        || error instanceof SyntaxError
+        || isStaleInstanceError(error)
+      ) {
+        await unregisterInstance(filePath);
+        return;
+      }
+      instances.push({
+        id: name.replace(/\.json$/, ""),
+        root: name,
+        status: "unknown",
+        error: error.message,
+      });
+    }
+  }));
+  return instances.sort((left, right) =>
+    String(left.startedAt ?? "").localeCompare(String(right.startedAt ?? ""))
+  );
+}
+
+export async function stopInstances({
+  registryDirectory = DEFAULT_INSTANCE_DIRECTORY,
+  timeoutMs = 2_000,
+  target,
+} = {}) {
+  const registrations = await registrationNames(registryDirectory);
   const summary = { stopped: 0, stale: 0, failed: [] };
 
   await Promise.all(registrations.map(async (name) => {
     const filePath = path.join(registryDirectory, name);
     let instance;
     try {
-      instance = JSON.parse(await fs.readFile(filePath, "utf8"));
-      if (
-        typeof instance.host !== "string"
-        || !Number.isInteger(instance.port)
-        || typeof instance.token !== "string"
-      ) {
-        throw Object.assign(new Error("实例登记文件无效"), { code: "ESTALE" });
+      instance = await readRegistration(filePath);
+      if (target !== undefined) {
+        const portTarget = /^\d+$/.test(String(target)) ? Number(target) : null;
+        const matches = portTarget !== null
+          ? instance.port === portTarget
+          : path.resolve(instance.root) === path.resolve(String(target));
+        if (!matches) return;
       }
       await requestStop(instance, timeoutMs);
       summary.stopped += 1;
@@ -144,4 +218,8 @@ export async function stopAllInstances({
   }
 
   return summary;
+}
+
+export async function stopAllInstances(options = {}) {
+  return stopInstances(options);
 }

@@ -4,12 +4,21 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { HELP_TEXT } from "../server/cli.mjs";
+import { HELP_TEXT, parseArguments } from "../server/cli.mjs";
 import { isDirectExecution } from "../server/index.mjs";
 
 test("shows only the installed command in user-facing help", () => {
   assert.match(HELP_TEXT, /lan-reader \[文件夹\] \[选项\]/);
   assert.doesNotMatch(HELP_TEXT, /npm start/);
+  assert.match(HELP_TEXT, /lan-reader list/);
+  assert.match(HELP_TEXT, /--protect/);
+});
+
+test("parses the temporary access protection option", () => {
+  const options = parseArguments(["/tmp/books", "--protect", "--port", "9000"]);
+  assert.equal(options.root, "/tmp/books");
+  assert.equal(options.protect, true);
+  assert.equal(options.port, 9000);
 });
 
 test("recognizes an npm-style symlink as direct CLI execution", async (t) => {

@@ -1,7 +1,7 @@
 {
   "name": "lan-reader",
-  "version": "0.1.2",
-  "description": "A read-only LAN document reader for Markdown, PDF, Word and PowerPoint files.",
+  "version": "0.5.0",
+  "description": "A secure, read-only LAN reader for documents, text files and opt-in source code.",
   "license": "MIT",
   "keywords": [
     "markdown",
@@ -27,6 +27,7 @@
     "dist",
     "server",
     "README.md",
+    "ROADMAP.md",
     "LICENSE",
     "SECURITY.md",
     "RELEASING.md"
@@ -49,13 +50,16 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "22.19.19",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
     "eslint": "^10.8.0",
     "github-slugger": "^2.0.0",
     "globals": "^16.3.0",
+    "highlight.js": "^11.11.1",
     "lucide-react": "^0.468.0",
+    "qrcode": "^1.5.4",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "react-markdown": "^10.1.0",
