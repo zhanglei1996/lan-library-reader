@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-c95735.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.13-4e6a55.svg)](https://nodejs.org/)
 
-把电脑上的文档文件夹变成一个可以用浏览器阅读的局域网电子书架。
+把电脑上的文档和源码文件夹变成一个可以用浏览器阅读的局域网电子书架。
 
 进入文件夹运行 `lan-reader` 后，电脑、手机和平板只要连接同一个局域网，就能查看目录并阅读文档。文件始终保留在自己的电脑上，不会上传到云端，也不会被修改或删除。
 
@@ -68,10 +68,15 @@ lan-reader stop
 - 电子书式界面：文件目录、正文和本页大纲
 - 响应式布局：适配电脑、手机和平板
 - Markdown：标题、表格、任务列表、引用、代码块和相对链接
+- 文本与源码：TXT 默认可用，其他扩展名可配置，支持语法高亮、行号和换行
 - PDF：浏览器内嵌预览、缩放和字节范围请求
 - Word/PPT：通过可选的 LibreOffice 转换为 PDF 预览
-- 阅读设置：浅色/深色主题、字号调节、上一篇/下一篇
-- 目录能力：文件夹树、文件名搜索、刷新和中文自然排序
+- 内容操作：复制全文、复制代码块、复制局域网链接和下载原文件
+- 阅读设置：浅色/深色主题、字号调节、上一篇/下一篇和阅读位置恢复
+- 目录能力：文件夹树、正文搜索、自动刷新和中文自然排序
+- 快速分享：生成当前文档二维码，多网卡地址可切换
+- 大型书架：目录分支增量扫描和正文索引缓存
+- 访问保护：可选临时访问码、会话 Cookie 和登录限流
 - 本地优先：无需云盘、账号或数据库
 - 只读安全：拒绝写入、目录穿越、隐藏文件和越界符号链接
 
@@ -80,26 +85,135 @@ lan-reader stop
 | 文件类型 | 扩展名 | 预览方式 |
 | --- | --- | --- |
 | Markdown | `.md` `.markdown` `.mdown` | 网页排版 |
+| 文本 | `.txt` | 等宽文本、行号和自动换行 |
+| 自定义文本/源码 | 通过 `.lan-reader.json` 设置 | 安全纯文本与语法高亮 |
 | PDF | `.pdf` | 浏览器内嵌 |
 | Word | `.doc` `.docx` | LibreOffice 转 PDF |
 | PowerPoint | `.ppt` `.pptx` | LibreOffice 转 PDF |
 | Markdown 图片 | PNG、JPEG、GIF、WebP、AVIF、BMP、SVG | 按相对路径加载 |
 
-没有安装 LibreOffice 时，Markdown 和 PDF 不受影响。Word 和 PowerPoint 文件仍会显示在目录中，并提供原文件下载。
+没有安装 LibreOffice 时，Markdown、TXT 和 PDF 不受影响。Word 和 PowerPoint 文件仍会显示在目录中，并提供原文件下载。
+
+## 目录扫描规则
+
+启动目录不要求包含 Markdown。LAN Reader 会递归遍历子文件夹，查找所有支持的文档：
+
+- 默认只收录深层目录中的 Markdown、TXT、PDF、Word 和 PowerPoint
+- 其他类型默认不会收录，也不会占用书架的文档数量上限；通过 `.lan-reader.json` 配置后才会收录
+- 只保留包含支持文档的目录分支
+- 空目录和只有不支持文件的目录不会显示
+- 跳过隐藏文件、隐藏目录、符号链接，以及常见构建目录：`node_modules`、`target`、`dist`、`build`、`out`、`coverage`、`vendor`、`bower_components`、`__pycache__`
+- 单独的图片不会出现在目录中，只在 Markdown 引用时加载
+- 书架最多收录 20,000 篇默认支持或主动配置的文档
+- 为避免误扫超大型磁盘目录，内部另有 250,000 个文件和文件夹的遍历安全上限；未配置的源码、图片等只参与查找，不计入书架文档数量
+- 某个子目录临时消失或无权读取时，会跳过该目录，不影响其余书架
+
+如果整个目录都没有支持的文档，服务仍会启动，但书架目录为空。
+
+### 排除自定义目录
+
+在启动目录创建 `.lan-readerignore`，每行填写一个不需要扫描的名称或相对路径：
+
+```text
+# 同名目录无论位于哪一层都会排除
+generated
+
+# 也可以只排除指定路径
+docs/archive/
+data/large-files
+```
+
+空行和以 `#` 开头的注释会被忽略。当前规则按目录名或相对路径精确匹配，不使用通配符，也不修改原文件。
+
+## 项目配置：`.lan-reader.json`
+
+`.lan-reader.json` 是可选的书架级配置文件，必须放在执行 `lan-reader` 的启动目录中。没有该文件时，LAN Reader 使用默认配置；不同书架可以分别配置，互不影响。
+
+它与 `.lan-readerignore` 的用途不同：
+
+- `.lan-reader.json`：设置书架名称、额外文本类型、预览方式和功能开关
+- `.lan-readerignore`：排除不需要递归查找的目录或路径
+
+TXT 已默认支持。要预览 JavaScript、TypeScript、Java、SQL、日志等纯文本文件，可以创建下面的完整配置：
+
+```json
+{
+  "version": 1,
+  "title": "我的源码书架",
+  "textPreview": {
+    "extensions": [".js", ".ts", ".java", ".sql", ".log", ".json", ".yaml"],
+    "maxBytes": 8388608,
+    "lineNumbers": true,
+    "wrap": true,
+    "syntaxHighlight": true
+  },
+  "features": {
+    "copy": true,
+    "download": true,
+    "fullTextSearch": true,
+    "autoRefresh": true,
+    "readingPosition": true,
+    "qrCode": true
+  }
+}
+```
+
+### 配置字段
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `version` | 数字 | 必填 | 当前只支持 `1`；创建配置文件时必须填写 |
+| `title` | 字符串 | 启动目录名称 | 显示在页面顶部的书架名称，不能是空字符串 |
+| `textPreview.extensions` | 字符串数组 | `[]` | 额外收录为纯文本的扩展名，例如 `.js`、`.log` |
+| `textPreview.maxBytes` | 整数 | `8388608` | 单个纯文本文件的读取上限，范围为 1 KB 至 32 MB |
+| `textPreview.lineNumbers` | 布尔值 | `true` | 打开文本时默认显示行号 |
+| `textPreview.wrap` | 布尔值 | `true` | 打开文本时默认自动换行 |
+| `textPreview.syntaxHighlight` | 布尔值 | `true` | 对已识别的源码类型启用语法高亮 |
+| `features.copy` | 布尔值 | `true` | 显示复制全文和复制代码按钮 |
+| `features.download` | 布尔值 | `true` | 允许下载原文件 |
+| `features.fullTextSearch` | 布尔值 | `true` | 启用文件名和正文搜索 |
+| `features.autoRefresh` | 布尔值 | `true` | 文件变化后自动刷新书架 |
+| `features.readingPosition` | 布尔值 | `true` | 在当前浏览器中记录阅读位置 |
+| `features.qrCode` | 布尔值 | `true` | 显示当前文档的局域网访问二维码 |
+
+只需要配置某一项时，可以省略其他分组和字段。例如，仅加入 JS 与日志预览：
+
+```json
+{
+  "version": 1,
+  "textPreview": {
+    "extensions": [".js", ".log"]
+  }
+}
+```
+
+### 配置规则
+
+- 文件必须是合法 JSON，不能包含注释或末尾多余逗号，最大为 256 KB
+- 自定义扩展名必须以 `.` 开头，不区分大小写；重复项会自动合并
+- Markdown、TXT、PDF、Word 和 PowerPoint 已默认支持，不需要重复配置
+- 自定义扩展名只会按安全纯文本读取；代码、HTML 和 JavaScript 都不会执行
+- 文本支持 UTF-8、UTF-8 BOM 和 GB18030/GBK 中文编码
+- 不认识的字段会被忽略，并在页面底部显示配置警告
+- 字段类型、扩展名或范围无效时，页面会显示具体配置错误，不会静默使用错误值
+- 修改配置后通常会自动刷新；如果系统监听不可用，可以点击“刷新书架”
 
 ## 命令用法
 
 ```text
 lan-reader [文件夹] [选项]
-lan-reader stop
+lan-reader list
+lan-reader stop [端口或文件夹]
 
 命令：
-stop                    停止这台电脑上的全部书架
+list                    显示这台电脑上运行中的书架
+stop                    停止全部书架，或按端口/文件夹停止一个书架
 
 选项：
 -r, --root <文件夹>   要阅读的文件夹，默认是当前目录
--p, --port <端口>     服务端口，默认 8080
+-p, --port <端口>     起始端口，默认 8080；被占用时自动递增
     --host <地址>     监听地址，默认 0.0.0.0
+    --protect         生成临时访问码保护书架
 -h, --help            显示帮助
 ```
 
@@ -111,17 +225,27 @@ lan-reader "/Users/your-name/Documents/notes" --port 9090
 
 ### 同时启动多个书架
 
-每个书架需要使用不同端口：
+分别在不同终端启动即可：
 
 ```bash
-lan-reader "/Users/your-name/Documents/notes" --port 8080
-lan-reader "/Users/your-name/Documents/books" --port 8081
+lan-reader "/Users/your-name/Documents/notes"
+lan-reader "/Users/your-name/Documents/books"
 ```
+
+第一个书架使用 `8080`。第二个发现端口已被占用后，会自动尝试 `8081`，然后继续逐一递增，最多尝试 100 个端口。终端会显示每个书架最终使用的地址。
 
 全部停止：
 
 ```bash
 lan-reader stop
+```
+
+查看所有书架，或只停止一个：
+
+```bash
+lan-reader list
+lan-reader stop 8081
+lan-reader stop "/Users/your-name/Documents/books"
 ```
 
 ## Word 和 PowerPoint 预览
@@ -152,7 +276,21 @@ npm uninstall -g lan-reader
 
 ## 局域网与安全
 
-LAN Reader 面向可信的家庭、宿舍或办公室局域网，目前没有账号登录功能。
+LAN Reader 面向家庭、宿舍或办公室局域网。普通启动保持无登录的便捷模式；包含源码、工作资料或隐私文档时，建议开启访问保护。
+
+每次启动生成一个临时访问码：
+
+```bash
+lan-reader --protect
+```
+
+终端会显示 8 位访问码。也可以通过环境变量设置固定访问码：
+
+```bash
+LAN_READER_ACCESS_CODE="your-private-code" lan-reader
+```
+
+访问保护使用 12 小时本地会话 Cookie，连续输错会被短暂限流。局域网 HTTP 本身不提供传输加密，因此访问码不能替代可信网络，也不要复用重要密码。
 
 - 只选择确实需要阅读的目录
 - 不要直接公开包含密钥、隐私数据或工作机密的目录
@@ -160,7 +298,7 @@ LAN Reader 面向可信的家庭、宿舍或办公室局域网，目前没有账
 - 不建议在公共 Wi-Fi 环境中启动
 - macOS 或 Windows 首次询问网络权限时，只允许需要的局域网访问
 
-所有文档接口只接受 `GET` 和 `HEAD` 请求。服务停止接口由每个实例的随机密钥保护，只供 `lan-reader stop` 调用。隐藏文件不会出现在目录中，指向书架外部的符号链接同样会被拒绝。
+文档接口保持只读。服务停止接口由每个实例的随机密钥保护，只供 `lan-reader stop` 调用。隐藏文件不会出现在目录中，指向书架外部的符号链接、未配置的源码类型和路径越界请求同样会被拒绝。
 
 更多信息见 [安全说明](SECURITY.md)。
 
@@ -170,9 +308,9 @@ LAN Reader 面向可信的家庭、宿舍或办公室局域网，目前没有账
 
 确认移动设备和电脑连接同一个 Wi-Fi，并检查电脑防火墙是否允许 Node.js 接收入站连接。移动设备必须使用启动信息中的局域网地址，不能使用 `localhost`。
 
-### 提示端口已被占用
+### 为什么启动地址不是 8080
 
-默认端口是 `8080`。可以停止已经运行的书架，或换一个端口：
+默认从 `8080` 开始。如果端口已被占用，LAN Reader 会自动尝试 `8081`、`8082`，直到找到可用端口，并在终端显示最终地址。也可以手动指定其他起始端口：
 
 ```bash
 lan-reader --port 8081
@@ -180,7 +318,15 @@ lan-reader --port 8081
 
 ### 新增文件后没有出现
 
-点击界面左下角的“刷新书架”，服务会重新扫描目录。
+服务会监听文件变化并自动刷新；监听不可用时，可以点击界面左下角的“刷新书架”重新扫描。
+
+### 为什么 JS 文件没有出现
+
+源码默认不会暴露到局域网。请在 `.lan-reader.json` 的 `textPreview.extensions` 中主动加入 `.js`，然后刷新书架。
+
+### 手机无法自动复制
+
+部分移动浏览器会限制普通 HTTP 页面的剪贴板权限。LAN Reader 会自动尝试兼容复制；仍不允许时会弹出文本框，可以长按手动复制。
 
 ### 文档会上传到互联网吗
 
@@ -189,6 +335,10 @@ lan-reader --port 8081
 ### 可以在网页里修改文件吗
 
 不可以。项目刻意保持只读，以降低误操作和局域网暴露风险。
+
+## 版本设计
+
+`0.2.0` 至 `0.5.0` 的产品、安全和测试设计记录见 [产品与开发计划](./ROADMAP.md)。
 
 ## 从源码开发
 

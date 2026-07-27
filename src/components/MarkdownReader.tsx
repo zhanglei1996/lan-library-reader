@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { isValidElement, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
-import { ExternalLink } from "lucide-react";
+import { Check, Copy, ExternalLink } from "lucide-react";
+import { copyText } from "../lib/clipboard";
 import { fileUrl, resolveRelativePath } from "../lib/path";
 import type { MarkdownDocument } from "../types";
 
@@ -25,6 +26,31 @@ function decodeMarkdownUrl(value: string): string {
   }
 }
 
+function nodeText(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(nodeText).join("");
+  if (isValidElement<{ children?: ReactNode }>(node)) return nodeText(node.props.children);
+  return "";
+}
+
+function CopyablePre({ children }: { children?: ReactNode }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    if (!await copyText(nodeText(children).replace(/\n$/, ""))) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1_500);
+  }
+  return (
+    <div className="code-block">
+      <button onClick={() => void copy()} aria-label="复制代码">
+        {copied ? <Check /> : <Copy />}
+        {copied ? "已复制" : "复制"}
+      </button>
+      <pre>{children}</pre>
+    </div>
+  );
+}
+
 export default function MarkdownReader({
   document,
   fontScale,
@@ -32,6 +58,7 @@ export default function MarkdownReader({
 }: MarkdownReaderProps) {
   const components = useMemo(
     () => ({
+      pre: CopyablePre,
       img: ({ src = "", alt = "" }: { src?: string; alt?: string }) => {
         const resolved = isExternal(src)
           ? src

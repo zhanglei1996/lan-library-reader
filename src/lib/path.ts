@@ -24,6 +24,6 @@ export function resolveRelativePath(fromFile: string, target: string): string {
   return resolved.join("/");
 }
 
-export function fileUrl(filePath: string): string {
-  return `/api/file?path=${encodeURIComponent(filePath)}`;
+export function fileUrl(filePath: string, download = false): string {
+  return `/api/file?path=${encodeURIComponent(filePath)}${download ? "&download=1" : ""}`;
 }
