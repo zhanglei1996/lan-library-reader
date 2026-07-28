@@ -255,6 +255,23 @@ test("protects document APIs with an access code and rate limits failures", asyn
   assert.deepEqual(status, { required: true, authenticated: false });
   assert.equal((await fetch(`${baseUrl}/api/snapshot`)).status, 401);
 
+  const malformedCookieStatus = await fetch(`${baseUrl}/api/auth/status`, {
+    headers: { Cookie: "lan_reader_session=%E0%A4%A" },
+  });
+  assert.equal(malformedCookieStatus.status, 200);
+  assert.deepEqual(await malformedCookieStatus.json(), {
+    required: true,
+    authenticated: false,
+  });
+
+  const malformedCode = await fetch(`${baseUrl}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: { toString: null } }),
+  });
+  assert.equal(malformedCode.status, 401);
+  assert.deepEqual(await malformedCode.json(), { error: "访问码错误" });
+
   const login = await fetch(`${baseUrl}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -266,6 +283,12 @@ test("protects document APIs with an access code and rate limits failures", asyn
     headers: { Cookie: cookie },
   });
   assert.equal(protectedResponse.status, 200);
+
+  const malformedCookieLogout = await fetch(`${baseUrl}/api/auth/logout`, {
+    method: "POST",
+    headers: { Cookie: "lan_reader_session=%E0%A4%A" },
+  });
+  assert.equal(malformedCookieLogout.status, 200);
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     await fetch(`${baseUrl}/api/auth/login`, {

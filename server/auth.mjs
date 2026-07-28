@@ -10,8 +10,9 @@ export function createReadableAccessCode() {
 }
 
 function safeEqual(left, right) {
-  const leftBuffer = Buffer.from(String(left), "utf8");
-  const rightBuffer = Buffer.from(String(right), "utf8");
+  if (typeof left !== "string" || typeof right !== "string") return false;
+  const leftBuffer = Buffer.from(left, "utf8");
+  const rightBuffer = Buffer.from(right, "utf8");
   return leftBuffer.length === rightBuffer.length
     && timingSafeEqual(leftBuffer, rightBuffer);
 }
@@ -20,7 +21,13 @@ function cookieValue(request, name) {
   const header = request.headers.cookie ?? "";
   for (const part of header.split(";")) {
     const [key, ...value] = part.trim().split("=");
-    if (key === name) return decodeURIComponent(value.join("="));
+    if (key === name) {
+      try {
+        return decodeURIComponent(value.join("="));
+      } catch {
+        return null;
+      }
+    }
   }
   return null;
 }

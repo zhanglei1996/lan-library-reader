@@ -274,9 +274,7 @@ button { color: inherit; }
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  background:
-    linear-gradient(90deg, transparent 49.8%, color-mix(in srgb, var(--line) 26%, transparent) 50%, transparent 50.2%),
-    var(--paper);
+  background: var(--paper);
 }
 .reader-toolbar {
   position: sticky;
@@ -428,6 +426,39 @@ button { color: inherit; }
 }
 .code-block > button:hover { border-color: var(--accent); }
 .code-block > button svg { width: 13px; }
+.mermaid-diagram, .mermaid-status, .mermaid-error {
+  overflow-x: auto;
+  margin: 1.8em 0;
+  padding: 24px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.mermaid-diagram {
+  display: flex;
+  justify-content: center;
+}
+.mermaid-diagram svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.mermaid-status {
+  color: #62655e;
+  text-align: center;
+  font-family: "DM Mono", monospace;
+  font-size: 0.78em;
+}
+.mermaid-error {
+  border-left: 3px solid var(--accent);
+  color: #20231f;
+}
+.mermaid-error > strong, .mermaid-error > span { display: block; }
+.mermaid-error > span {
+  margin-top: 6px;
+  color: #62655e;
+  font-size: 0.78em;
+}
+.markdown-body .mermaid-error pre { margin-bottom: 0; }
 
 .text-reader {
   max-width: 1120px;
