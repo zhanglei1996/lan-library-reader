@@ -67,7 +67,7 @@ lan-reader stop
 
 - 电子书式界面：文件目录、正文和本页大纲
 - 响应式布局：适配电脑、手机和平板
-- Markdown：标题、表格、任务列表、引用、代码块和相对链接
+- Markdown：标题、表格、任务列表、引用、代码块、Mermaid 流程图和相对链接
 - 文本与源码：TXT 默认可用，其他扩展名可配置，支持语法高亮、行号和换行
 - PDF：浏览器内嵌预览、缩放和字节范围请求
 - Word/PPT：通过可选的 LibreOffice 转换为 PDF 预览
@@ -93,6 +93,16 @@ lan-reader stop
 | Markdown 图片 | PNG、JPEG、GIF、WebP、AVIF、BMP、SVG | 按相对路径加载 |
 
 没有安装 LibreOffice 时，Markdown、TXT 和 PDF 不受影响。Word 和 PowerPoint 文件仍会显示在目录中，并提供原文件下载。
+
+Markdown 中标记为 `mermaid` 的代码块会自动渲染为流程图、时序图等图形。普通代码块仍按原样显示并提供复制按钮：
+
+````markdown
+```mermaid
+flowchart TD
+  Start[开始] --> Read[打开文档]
+  Read --> End[完成]
+```
+````
 
 ## 目录扫描规则
 

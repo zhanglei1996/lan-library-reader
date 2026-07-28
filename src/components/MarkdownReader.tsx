@@ -7,6 +7,7 @@ import { Check, Copy, ExternalLink } from "lucide-react";
 import { copyText } from "../lib/clipboard";
 import { fileUrl, resolveRelativePath } from "../lib/path";
 import type { MarkdownDocument } from "../types";
+import MermaidDiagram from "./MermaidDiagram";
 
 interface MarkdownReaderProps {
   document: MarkdownDocument;
@@ -33,7 +34,7 @@ function nodeText(node: ReactNode): string {
   return "";
 }
 
-function CopyablePre({ children }: { children?: ReactNode }) {
+function CopyableCodeBlock({ children }: { children?: ReactNode }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
     if (!await copyText(nodeText(children).replace(/\n$/, ""))) return;
@@ -51,6 +52,20 @@ function CopyablePre({ children }: { children?: ReactNode }) {
   );
 }
 
+function MarkdownPre({ children }: { children?: ReactNode }) {
+  if (isValidElement<{ className?: string; children?: ReactNode }>(children)) {
+    const languages = children.props.className?.split(/\s+/) ?? [];
+    if (languages.includes("language-mermaid")) {
+      return (
+        <MermaidDiagram
+          source={nodeText(children.props.children).replace(/\n$/, "")}
+        />
+      );
+    }
+  }
+  return <CopyableCodeBlock>{children}</CopyableCodeBlock>;
+}
+
 export default function MarkdownReader({
   document,
   fontScale,
@@ -58,7 +73,7 @@ export default function MarkdownReader({
 }: MarkdownReaderProps) {
   const components = useMemo(
     () => ({
-      pre: CopyablePre,
+      pre: MarkdownPre,
       img: ({ src = "", alt = "" }: { src?: string; alt?: string }) => {
         const resolved = isExternal(src)
           ? src
