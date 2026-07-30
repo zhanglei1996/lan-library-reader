@@ -21,6 +21,21 @@ test("parses the temporary access protection option", () => {
   assert.equal(options.port, 9000);
 });
 
+test("rejects missing option values and extra folders", () => {
+  assert.throws(
+    () => parseArguments(["--host", "--protect"]),
+    /参数 --host 缺少值/,
+  );
+  assert.throws(
+    () => parseArguments(["--root"]),
+    /参数 --root 缺少值/,
+  );
+  assert.throws(
+    () => parseArguments(["notes", "archive"]),
+    /只能指定一个要阅读的文件夹/,
+  );
+});
+
 test("recognizes an npm-style symlink as direct CLI execution", async (t) => {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "lan-reader-cli-"));
   const commandPath = path.join(workspace, "lan-reader");

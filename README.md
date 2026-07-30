@@ -9,6 +9,10 @@
 
 进入文件夹运行 `lan-reader` 后，电脑、手机和平板只要连接同一个局域网，就能查看目录并阅读文档。文件始终保留在自己的电脑上，不会上传到云端，也不会被修改或删除。
 
+## 界面预览
+
+![LAN Reader 局域网书架预览](https://raw.githubusercontent.com/zhanglei1996/lan-library-reader/main/docs/images/lan-reader-preview.png)
+
 ## 快速开始
 
 需要提前安装 Node.js 22.13 或更高版本。

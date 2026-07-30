@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { promises as fs } from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -91,4 +92,38 @@ test("reports no work when no reader instances are registered", async (t) => {
     registryDirectory: path.join(workspace, "missing"),
   });
   assert.deepEqual(summary, { stopped: 0, stale: 0, failed: [] });
+});
+
+test("does not mistake an unrelated service on a reused port for LAN Reader", async (t) => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "lan-reader-reused-port-"));
+  const registryDirectory = path.join(workspace, "registry");
+  const decoy = http.createServer((_request, response) => {
+    response.writeHead(200, { "Content-Type": "application/json" });
+    response.end('{"status":"ok"}');
+  });
+  await new Promise((resolve) => decoy.listen(0, "127.0.0.1", resolve));
+  t.after(async () => {
+    if (decoy.listening) await new Promise((resolve) => decoy.close(resolve));
+    await fs.rm(workspace, { recursive: true, force: true });
+  });
+
+  const address = decoy.address();
+  assert.equal(typeof address, "object");
+  const instance = {
+    token: createControlToken(),
+    root: workspace,
+    host: "127.0.0.1",
+    port: address.port,
+  };
+
+  await registerInstance(instance, { registryDirectory });
+  assert.deepEqual(await listInstances({ registryDirectory }), []);
+  assert.deepEqual(await fs.readdir(registryDirectory), []);
+
+  await registerInstance(instance, { registryDirectory });
+  assert.deepEqual(
+    await stopInstances({ registryDirectory }),
+    { stopped: 0, stale: 1, failed: [] },
+  );
+  assert.equal(decoy.listening, true);
 });

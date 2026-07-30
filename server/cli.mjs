@@ -8,16 +8,27 @@ export function parseArguments(argv, defaults = {}) {
   };
   const positional = [];
 
+  function valueAfter(index, option) {
+    const value = argv[index + 1];
+    if (value === undefined || value.startsWith("-")) {
+      throw new Error(`参数 ${option} 缺少值`);
+    }
+    return value;
+  }
+
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--help" || argument === "-h") {
       options.help = true;
     } else if (argument === "--root" || argument === "-r") {
-      options.root = argv[++index];
+      options.root = valueAfter(index, argument);
+      index += 1;
     } else if (argument === "--port" || argument === "-p") {
-      options.port = Number(argv[++index]);
+      options.port = Number(valueAfter(index, argument));
+      index += 1;
     } else if (argument === "--host") {
-      options.host = argv[++index];
+      options.host = valueAfter(index, argument);
+      index += 1;
     } else if (argument === "--protect") {
       options.protect = true;
     } else if (argument.startsWith("-")) {
@@ -27,6 +38,7 @@ export function parseArguments(argv, defaults = {}) {
     }
   }
 
+  if (positional.length > 1) throw new Error("只能指定一个要阅读的文件夹");
   if (positional[0]) options.root = positional[0];
   if (!options.root) throw new Error("请提供要阅读的文件夹");
   if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) {
