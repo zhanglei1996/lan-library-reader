@@ -100,6 +100,9 @@ export default function App() {
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [fontScale, setFontScale] = useState(1);
   const documentRequest = useRef(0);
+  const documentAbort = useRef<AbortController | undefined>(undefined);
+  const libraryRequest = useRef(0);
+  const selectedPath = useRef<string | undefined>(undefined);
   const readerRef = useRef<HTMLElement>(null);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const saved = localStorage.getItem("lan-reader-theme");
@@ -118,6 +121,9 @@ export default function App() {
 
   const loadDocument = useCallback(async (file: FileNode) => {
     const requestId = ++documentRequest.current;
+    documentAbort.current?.abort();
+    documentAbort.current = undefined;
+    selectedPath.current = file.path;
     setSelected(file);
     setMarkdown(undefined);
     setTextDocument(undefined);
@@ -126,22 +132,29 @@ export default function App() {
     window.history.replaceState(null, "", `?doc=${encodeURIComponent(file.path)}`);
 
     if (file.kind === "markdown" || file.kind === "text") {
+      const controller = new AbortController();
+      documentAbort.current = controller;
       try {
         const response = await fetch(
           `/api/${file.kind === "markdown" ? "markdown" : "text"}?path=${encodeURIComponent(file.path)}`,
+          { signal: controller.signal },
         );
         if (response.status === 401) {
+          if (requestId !== documentRequest.current) return;
           setAuthenticated(false);
           setAuthRequired(true);
           return;
         }
         if (!response.ok) throw new Error(await apiError(response, "文档读取失败"));
-        if (requestId !== documentRequest.current) return;
-        if (file.kind === "markdown") setMarkdown(await response.json());
-        else setTextDocument(await response.json());
+        const document = await response.json();
+        if (controller.signal.aborted || requestId !== documentRequest.current) return;
+        if (file.kind === "markdown") setMarkdown(document as MarkdownDocument);
+        else setTextDocument(document as TextDocument);
       } catch (reason) {
-        if (requestId !== documentRequest.current) return;
+        if (controller.signal.aborted || requestId !== documentRequest.current) return;
         setError(reason instanceof Error ? reason.message : "文档读取失败");
+      } finally {
+        if (documentAbort.current === controller) documentAbort.current = undefined;
       }
     }
     readerRef.current?.scrollTo({ top: 0, behavior: "instant" });
@@ -151,17 +164,20 @@ export default function App() {
     keepSelection = true,
     forceRefresh = false,
   ) => {
+    const requestId = ++libraryRequest.current;
     setLoading(true);
     setError("");
     try {
       const response = await fetch(`/api/snapshot${forceRefresh ? "?refresh=1" : ""}`);
       if (response.status === 401) {
+        if (requestId !== libraryRequest.current) return;
         setAuthRequired(true);
         setAuthenticated(false);
         return;
       }
       if (!response.ok) throw new Error(await apiError(response, "无法读取书架"));
       const snapshot = (await response.json()) as LibrarySnapshot;
+      if (requestId !== libraryRequest.current) return;
       const nextTree = snapshot.tree;
       const nextInfo = snapshot.info;
       setTree(nextTree);
@@ -180,23 +196,25 @@ export default function App() {
       }
 
       const requestedPath = new URLSearchParams(location.search).get("doc");
-      const currentPath = keepSelection ? selected?.path : undefined;
+      const currentPath = keepSelection ? selectedPath.current : undefined;
       const nextFile =
         (currentPath && findFile(nextTree, currentPath))
         || (requestedPath && findFile(nextTree, requestedPath))
         || firstFile(nextTree);
       if (nextFile) await loadDocument(nextFile);
       else {
+        selectedPath.current = undefined;
         setSelected(undefined);
         setMarkdown(undefined);
         setTextDocument(undefined);
       }
     } catch (reason) {
+      if (requestId !== libraryRequest.current) return;
       setError(reason instanceof Error ? reason.message : "无法读取书架");
     } finally {
-      setLoading(false);
+      if (requestId === libraryRequest.current) setLoading(false);
     }
-  }, [loadDocument, selected?.path]);
+  }, [loadDocument]);
 
   useEffect(() => {
     void (async () => {
@@ -217,6 +235,10 @@ export default function App() {
         setAuthReady(true);
       }
     })();
+  }, []);
+
+  useEffect(() => () => {
+    documentAbort.current?.abort();
   }, []);
 
   useEffect(() => {
@@ -338,6 +360,10 @@ export default function App() {
   }
 
   async function logout() {
+    libraryRequest.current += 1;
+    documentRequest.current += 1;
+    documentAbort.current?.abort();
+    selectedPath.current = undefined;
     await fetch("/api/auth/logout", { method: "POST" });
     setAuthenticated(false);
     setInfo(null);

@@ -354,6 +354,11 @@ test("protects the graceful stop endpoint with a secret token", async (t) => {
   });
 
   const endpoint = `http://127.0.0.1:${result.port}/api/control/stop`;
+  const healthEndpoint = `http://127.0.0.1:${result.port}/api/control/health`;
+  const unauthorizedHealth = await fetch(healthEndpoint);
+  const authorizedHealth = await fetch(healthEndpoint, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   const unauthorized = await fetch(endpoint, { method: "POST" });
   const wrongMethod = await fetch(endpoint, {
     headers: { Authorization: `Bearer ${token}` },
@@ -364,9 +369,13 @@ test("protects the graceful stop endpoint with a secret token", async (t) => {
   });
   await stopped;
 
+  assert.equal(unauthorizedHealth.status, 404);
+  assert.equal(authorizedHealth.status, 200);
+  assert.equal(authorizedHealth.headers.get("x-lan-reader-control"), "1");
   assert.equal(unauthorized.status, 404);
   assert.equal(wrongMethod.status, 405);
   assert.equal(authorized.status, 202);
+  assert.equal(authorized.headers.get("x-lan-reader-control"), "1");
   assert.deepEqual(await authorized.json(), { stopping: true });
 });
 

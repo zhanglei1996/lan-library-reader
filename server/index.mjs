@@ -66,6 +66,7 @@ const SAFE_ASSET_EXTENSIONS = new Set([
   ".ico",
   ".woff2",
 ]);
+const CONTROL_RESPONSE_HEADER = "X-Lan-Reader-Control";
 
 function setSecurityHeaders(response, { file = false } = {}) {
   response.setHeader("X-Content-Type-Options", "nosniff");
@@ -253,6 +254,21 @@ export async function createReaderServer({
       const url = new URL(request.url, "http://localhost");
       const isApi = url.pathname.startsWith("/api/");
 
+      if (url.pathname === "/api/control/health") {
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          response.setHeader("Allow", "GET, HEAD");
+          sendJson(response, 405, { error: "健康检查只接受 GET 或 HEAD 请求" });
+          return;
+        }
+        if (!isValidControlToken(request.headers.authorization, controlToken)) {
+          sendJson(response, 404, { error: "接口不存在" });
+          return;
+        }
+        response.setHeader(CONTROL_RESPONSE_HEADER, "1");
+        sendJson(response, 200, { status: "ok" });
+        return;
+      }
+
       if (url.pathname === "/api/control/stop") {
         if (request.method !== "POST") {
           response.setHeader("Allow", "POST");
@@ -266,6 +282,7 @@ export async function createReaderServer({
           sendJson(response, 404, { error: "接口不存在" });
           return;
         }
+        response.setHeader(CONTROL_RESPONSE_HEADER, "1");
         sendJson(response, 202, { stopping: true });
         setImmediate(() => onStop());
         return;

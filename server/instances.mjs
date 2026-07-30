@@ -4,6 +4,9 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 
+const CONTROL_PROTOCOL_VERSION = 1;
+const CONTROL_RESPONSE_HEADER = "x-lan-reader-control";
+
 export const DEFAULT_INSTANCE_DIRECTORY = path.join(
   os.homedir(),
   ".lan-library-reader",
@@ -32,6 +35,7 @@ export async function registerInstance(
   const instance = {
     id,
     pid,
+    protocolVersion: CONTROL_PROTOCOL_VERSION,
     root,
     host,
     port,
@@ -58,6 +62,7 @@ function controlHost(host) {
 }
 
 function requestStop(instance, timeoutMs) {
+  const authenticatedControl = instance.protocolVersion >= CONTROL_PROTOCOL_VERSION;
   return new Promise((resolve, reject) => {
     const request = http.request(
       {
@@ -73,8 +78,17 @@ function requestStop(instance, timeoutMs) {
       (response) => {
         response.resume();
         response.once("end", () => {
-          if (response.statusCode === 202) resolve();
-          else reject(new Error(`停止请求返回状态 ${response.statusCode}`));
+          if (
+            response.statusCode === 202
+            && (!authenticatedControl || response.headers[CONTROL_RESPONSE_HEADER] === "1")
+          ) {
+            resolve();
+          } else {
+            reject(Object.assign(
+              new Error(`停止请求返回状态 ${response.statusCode}`),
+              authenticatedControl ? { code: "ESTALE" } : {},
+            ));
+          }
         });
       },
     );
@@ -87,19 +101,34 @@ function requestStop(instance, timeoutMs) {
 }
 
 function requestHealth(instance, timeoutMs) {
+  const authenticatedControl = instance.protocolVersion >= CONTROL_PROTOCOL_VERSION;
   return new Promise((resolve, reject) => {
     const request = http.get(
       {
         host: controlHost(instance.host),
         port: instance.port,
-        path: "/api/health",
-        headers: { Connection: "close" },
+        path: authenticatedControl ? "/api/control/health" : "/api/health",
+        headers: {
+          Connection: "close",
+          ...(authenticatedControl
+            ? { Authorization: `Bearer ${instance.token}` }
+            : {}),
+        },
       },
       (response) => {
         response.resume();
         response.once("end", () => {
-          if (response.statusCode === 200) resolve();
-          else reject(new Error(`健康检查返回状态 ${response.statusCode}`));
+          if (
+            response.statusCode === 200
+            && (!authenticatedControl || response.headers[CONTROL_RESPONSE_HEADER] === "1")
+          ) {
+            resolve();
+          } else {
+            reject(Object.assign(
+              new Error(`健康检查返回状态 ${response.statusCode}`),
+              authenticatedControl ? { code: "ESTALE" } : {},
+            ));
+          }
         });
       },
     );
@@ -131,6 +160,13 @@ async function readRegistration(filePath) {
     || !Number.isInteger(instance.port)
     || typeof instance.token !== "string"
     || typeof instance.root !== "string"
+    || (
+      instance.protocolVersion !== undefined
+      && (
+        !Number.isInteger(instance.protocolVersion)
+        || instance.protocolVersion < CONTROL_PROTOCOL_VERSION
+      )
+    )
   ) {
     throw Object.assign(new Error("实例登记文件无效"), { code: "ESTALE" });
   }

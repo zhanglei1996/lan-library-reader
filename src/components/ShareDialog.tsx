@@ -11,13 +11,29 @@ export default function ShareDialog({
 }) {
   const [url, setUrl] = useState(urls[0] ?? "");
   const [image, setImage] = useState("");
+  const [error, setError] = useState("");
   useEffect(() => {
+    let cancelled = false;
     setImage("");
+    setError("");
+    if (!url) {
+      setError("没有可用于生成二维码的地址");
+      return () => {
+        cancelled = true;
+      };
+    }
     void QRCode.toDataURL(url, {
       width: 280,
       margin: 2,
       color: { dark: "#13251d", light: "#ffffff" },
-    }).then(setImage);
+    }).then((nextImage) => {
+      if (!cancelled) setImage(nextImage);
+    }).catch(() => {
+      if (!cancelled) setError("二维码生成失败，请复制下方地址");
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [url]);
   return (
     <div className="dialog-backdrop" role="presentation" onClick={onClose}>
@@ -43,7 +59,10 @@ export default function ShareDialog({
             ))}
           </select>
         )}
-        {image ? <img src={image} alt="当前文档二维码" /> : <p>正在生成二维码…</p>}
+        {image
+          ? <img src={image} alt="当前文档二维码" />
+          : !error && <p>正在生成二维码…</p>}
+        {error && <p role="alert">{error}</p>}
         <code>{url}</code>
       </section>
     </div>
