@@ -77,7 +77,7 @@ lan-reader stop
 - Word/PPT：通过可选的 LibreOffice 转换为 PDF 预览
 - 内容操作：复制全文、复制代码块、复制局域网链接和下载原文件
 - 阅读设置：浅色/深色主题、字号调节、上一篇/下一篇和阅读位置恢复
-- 目录能力：文件夹树、正文搜索、自动刷新和中文自然排序
+- 目录能力：文件夹树、目录名/文件名/正文搜索、自动刷新和中文自然排序
 - 快速分享：生成当前文档二维码，多网卡地址可切换
 - 大型书架：目录分支增量扫描和正文索引缓存
 - 访问保护：可选临时访问码、会话 Cookie 和登录限流
@@ -185,7 +185,7 @@ TXT 已默认支持。要预览 JavaScript、TypeScript、Java、SQL、日志等
 | `textPreview.syntaxHighlight` | 布尔值 | `true` | 对已识别的源码类型启用语法高亮 |
 | `features.copy` | 布尔值 | `true` | 显示复制全文和复制代码按钮 |
 | `features.download` | 布尔值 | `true` | 允许下载原文件 |
-| `features.fullTextSearch` | 布尔值 | `true` | 启用文件名和正文搜索 |
+| `features.fullTextSearch` | 布尔值 | `true` | 启用目录名、文件名和正文搜索 |
 | `features.autoRefresh` | 布尔值 | `true` | 文件变化后自动刷新书架 |
 | `features.readingPosition` | 布尔值 | `true` | 在当前浏览器中记录阅读位置 |
 | `features.qrCode` | 布尔值 | `true` | 显示当前文档的局域网访问二维码 |
