@@ -644,11 +644,14 @@ export default function App() {
           )}
           {selected?.kind === "markdown" && markdown && (
             <MarkdownReader
+              key={markdown.path}
               document={markdown}
               fontScale={fontScale}
               onNavigate={(path) => {
                 const target = findFile(tree, path);
-                if (target) void loadDocument(target);
+                if (!target) return false;
+                void loadDocument(target);
+                return true;
               }}
             />
           )}

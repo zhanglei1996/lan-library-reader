@@ -1,64 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
-import hljs from "highlight.js/lib/core";
 import { ListOrdered, WrapText } from "lucide-react";
+import {
+  ensureHighlightLanguage,
+  highlightedCode,
+} from "../lib/highlight";
 import type { TextDocument } from "../types";
-
-const LANGUAGE_ALIASES: Record<string, string> = {
-  shell: "bash",
-  html: "xml",
-};
-const LANGUAGE_LOADERS = {
-  bash: () => import("highlight.js/lib/languages/bash"),
-  css: () => import("highlight.js/lib/languages/css"),
-  go: () => import("highlight.js/lib/languages/go"),
-  java: () => import("highlight.js/lib/languages/java"),
-  javascript: () => import("highlight.js/lib/languages/javascript"),
-  json: () => import("highlight.js/lib/languages/json"),
-  python: () => import("highlight.js/lib/languages/python"),
-  rust: () => import("highlight.js/lib/languages/rust"),
-  sql: () => import("highlight.js/lib/languages/sql"),
-  typescript: () => import("highlight.js/lib/languages/typescript"),
-  xml: () => import("highlight.js/lib/languages/xml"),
-  yaml: () => import("highlight.js/lib/languages/yaml"),
-};
-
-async function ensureLanguage(language: string) {
-  const canonical = LANGUAGE_ALIASES[language] ?? language;
-  if (hljs.getLanguage(language)) return true;
-  const loader = LANGUAGE_LOADERS[canonical as keyof typeof LANGUAGE_LOADERS];
-  if (!loader) return false;
-  const module = await loader();
-  if (!hljs.getLanguage(canonical)) hljs.registerLanguage(canonical, module.default);
-  if (language !== canonical && !hljs.getLanguage(language)) {
-    hljs.registerLanguage(language, module.default);
-  }
-  return true;
-}
-
-function highlightedNodes(content: string, language: string): ReactNode {
-  if (!hljs.getLanguage(language)) return content;
-  const html = hljs.highlight(content, { language, ignoreIllegals: true }).value;
-  const parsed = new DOMParser().parseFromString(`<code>${html}</code>`, "text/html");
-
-  function convert(node: Node, key: string): ReactNode {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent;
-    if (!(node instanceof HTMLElement)) return null;
-    const children = [...node.childNodes].map((child, index) =>
-      convert(child, `${key}-${index}`),
-    );
-    if (node.tagName === "SPAN") {
-      const safeClass = [...node.classList]
-        .filter((name) => /^hljs-[a-z-]+$/.test(name))
-        .join(" ");
-      return <span className={safeClass} key={key}>{children}</span>;
-    }
-    return <span key={key}>{children}</span>;
-  }
-
-  return [...(parsed.body.firstElementChild?.childNodes ?? [])]
-    .map((node, index) => convert(node, String(index)));
-}
 
 export default function TextReader({
   document,
@@ -88,7 +34,7 @@ export default function TextReader({
     if (!canHighlight) return () => {
       active = false;
     };
-    void ensureLanguage(document.language)
+    void ensureHighlightLanguage(document.language)
       .then((available) => {
         if (active) setHighlightReady(available);
       })
@@ -101,7 +47,7 @@ export default function TextReader({
   }, [canHighlight, document.language]);
   const content = useMemo(
     () => canHighlight && highlightReady
-      ? highlightedNodes(document.content, document.language)
+      ? highlightedCode(document.content, document.language)
       : document.content,
     [canHighlight, document.content, document.language, highlightReady],
   );
