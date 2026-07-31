@@ -6,9 +6,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createAccessController, createReadableAccessCode } from "./auth.mjs";
-import { HELP_TEXT, parseArguments } from "./cli.mjs";
+import { HELP_TEXT, VERSION, parseArguments } from "./cli.mjs";
 import { publicReaderConfig } from "./config.mjs";
 import { createLibreOfficeConverter } from "./converters/libreoffice.mjs";
+import { startDaemonProcess } from "./daemon.mjs";
 import {
   createControlToken,
   isValidControlToken,
@@ -28,6 +29,11 @@ import {
 } from "./library.mjs";
 import { createLibraryScanner } from "./scanner.mjs";
 import { searchLibrary } from "./search.mjs";
+import {
+  automaticUpdateChecksEnabled,
+  checkForUpdate,
+  updateNotice,
+} from "./update-check.mjs";
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const defaultDistDirectory = path.resolve(moduleDirectory, "../dist");
@@ -576,7 +582,38 @@ export async function startReaderServer(options = {}) {
 
 async function main() {
   const rawArguments = process.argv.slice(2);
+  if (rawArguments[0] === "help" || rawArguments[0] === "version") {
+    if (rawArguments.length > 1) {
+      console.error(`${rawArguments[0]} 命令不接受额外参数`);
+      console.error("\n运行 lan-reader --help 查看用法。");
+      process.exitCode = 1;
+      return;
+    }
+    console.log(rawArguments[0] === "help" ? HELP_TEXT : `lan-reader ${VERSION}`);
+    return;
+  }
+  if (rawArguments[0] === "check-update") {
+    if (rawArguments.length > 1) {
+      console.error("check-update 命令不接受额外参数");
+      console.error("\n运行 lan-reader --help 查看用法。");
+      process.exitCode = 1;
+      return;
+    }
+    const result = await checkForUpdate({
+      currentVersion: VERSION,
+      force: true,
+    });
+    console.log(updateNotice(result, { explicit: true }));
+    if (result.status === "unavailable") process.exitCode = 1;
+    return;
+  }
   if (rawArguments[0] === "list") {
+    if (rawArguments.length > 1) {
+      console.error("list 命令不接受额外参数");
+      console.error("\n运行 lan-reader --help 查看用法。");
+      process.exitCode = 1;
+      return;
+    }
     const instances = await listInstances();
     if (instances.length === 0) {
       console.log("当前没有运行中的局域网书架。");
@@ -585,8 +622,11 @@ async function main() {
     console.log("运行中的局域网书架：");
     for (const instance of instances) {
       console.log(
-        `- ${instance.root}  http://localhost:${instance.port}  ${instance.startedAt ?? ""}`,
+        `- ${instance.root}  http://localhost:${instance.port}  PID ${instance.pid ?? "-"}  ${
+          instance.background ? "后台" : "前台"
+        }`,
       );
+      if (instance.logPath) console.log(`  日志：${instance.logPath}`);
     }
     return;
   }
@@ -633,12 +673,38 @@ async function main() {
     console.log(HELP_TEXT);
     return;
   }
+  if (options.version) {
+    console.log(`lan-reader ${VERSION}`);
+    return;
+  }
 
   try {
     await fs.access(defaultDistDirectory);
   } catch {
     console.error("尚未生成网页资源，请先运行 npm run build。");
     process.exitCode = 1;
+    return;
+  }
+
+  const updatePromise = automaticUpdateChecksEnabled()
+    ? checkForUpdate({ currentVersion: VERSION })
+    : Promise.resolve(null);
+  const isDaemonChild = process.env.LAN_READER_DAEMON_CHILD === "1";
+  if (!options.foreground && !isDaemonChild) {
+    try {
+      const details = await startDaemonProcess({
+        args: rawArguments,
+        entryPath: fileURLToPath(import.meta.url),
+      });
+      printStartup(details);
+      const updateResult = await updatePromise;
+      const notice = updateResult ? updateNotice(updateResult) : null;
+      if (notice) console.log(`\n${notice}\n`);
+    } catch (error) {
+      console.error(`后台启动失败：${error.message}`);
+      if (error.logPath) console.error(`日志：${error.logPath}`);
+      process.exitCode = 1;
+    }
     return;
   }
 
@@ -674,6 +740,8 @@ async function main() {
       root: path.resolve(options.root),
       host: result.host,
       port: result.port,
+      background: isDaemonChild,
+      logPath: process.env.LAN_READER_LOG_PATH,
     });
   } catch (error) {
     result.server.close();
@@ -686,18 +754,55 @@ async function main() {
     if (registration?.filePath) rmSync(registration.filePath, { force: true });
   });
 
-  console.log("\n局域网书架已启动");
-  if (accessCode) {
+  const details = {
+    background: isDaemonChild,
+    pid: process.pid,
+    root: path.resolve(options.root),
+    port: result.port,
+    requestedPort: result.requestedPort,
+    portAdjusted: result.portAdjusted,
+    urls: result.urls,
+    accessProtected: Boolean(accessCode),
+    generatedAccessCode,
+    logPath: process.env.LAN_READER_LOG_PATH,
+  };
+  printStartup(details);
+  if (isDaemonChild && process.send) {
+    process.send({ type: "ready", details });
+  }
+  const updateResult = await updatePromise;
+  const notice = updateResult ? updateNotice(updateResult) : null;
+  if (notice) console.log(`\n${notice}\n`);
+}
+
+function printStartup(details) {
+  console.log(
+    details.background
+      ? `\n局域网书架已在后台启动（PID ${details.pid}）`
+      : "\n局域网书架已在前台启动",
+  );
+  if (details.accessProtected) {
     console.log(
-      `访问保护：已启用${generatedAccessCode ? `，临时访问码 ${generatedAccessCode}` : ""}`,
+      `访问保护：已启用${
+        details.generatedAccessCode
+          ? `，临时访问码 ${details.generatedAccessCode}`
+          : ""
+      }`,
     );
   }
-  if (result.portAdjusted) {
-    console.log(`端口 ${result.requestedPort} 已被占用，已自动使用 ${result.port}。`);
+  if (details.portAdjusted) {
+    console.log(
+      `端口 ${details.requestedPort} 已被占用，已自动使用 ${details.port}。`,
+    );
   }
-  console.log(`本机访问：http://localhost:${result.port}`);
-  for (const url of result.urls) console.log(`局域网访问：${url}`);
-  console.log("按 Ctrl+C 停止当前服务。");
+  console.log(`本机访问：http://localhost:${details.port}`);
+  for (const url of details.urls) console.log(`局域网访问：${url}`);
+  if (details.background) {
+    if (details.logPath) console.log(`日志：${details.logPath}`);
+    console.log("现在可以关闭当前终端。");
+  } else {
+    console.log("按 Ctrl+C 停止当前服务。");
+  }
   console.log("运行 lan-reader stop 可一键停止全部书架。\n");
 }
 
@@ -712,6 +817,9 @@ export function isDirectExecution(argvEntry = process.argv[1]) {
 
 if (isDirectExecution()) {
   main().catch((error) => {
+    if (process.send) {
+      process.send({ type: "error", message: error.message });
+    }
     console.error(error.message);
     process.exitCode = 1;
   });

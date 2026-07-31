@@ -1,15 +1,14 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { promises as fs } from "node:fs";
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
+import { DEFAULT_STATE_DIRECTORY } from "./state.mjs";
 
 const CONTROL_PROTOCOL_VERSION = 1;
 const CONTROL_RESPONSE_HEADER = "x-lan-reader-control";
 
 export const DEFAULT_INSTANCE_DIRECTORY = path.join(
-  os.homedir(),
-  ".lan-library-reader",
+  DEFAULT_STATE_DIRECTORY,
   "instances",
 );
 
@@ -25,7 +24,15 @@ export function isValidControlToken(authorization, expectedToken) {
 }
 
 export async function registerInstance(
-  { token, root, host, port, pid = process.pid },
+  {
+    token,
+    root,
+    host,
+    port,
+    pid = process.pid,
+    background = false,
+    logPath,
+  },
   { registryDirectory = DEFAULT_INSTANCE_DIRECTORY } = {},
 ) {
   await fs.mkdir(registryDirectory, { recursive: true, mode: 0o700 });
@@ -40,6 +47,8 @@ export async function registerInstance(
     host,
     port,
     token,
+    background,
+    ...(logPath ? { logPath } : {}),
     startedAt: new Date().toISOString(),
   };
   await fs.writeFile(filePath, `${JSON.stringify(instance)}\n`, {

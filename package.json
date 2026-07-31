@@ -1,6 +1,6 @@
 {
   "name": "lan-reader",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "A secure, read-only LAN reader for documents, text files and opt-in source code.",
   "license": "MIT",
   "keywords": [
