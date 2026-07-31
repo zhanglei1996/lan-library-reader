@@ -174,6 +174,7 @@ test("loads custom text configuration, previews source, searches content, and do
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "lan-reader-configured-server-"));
   const root = path.join(workspace, "source");
   await fs.mkdir(root);
+  await fs.mkdir(path.join(root, "SSelect"));
   await Promise.all([
     fs.writeFile(path.join(root, ".lan-reader.json"), JSON.stringify({
       version: 1,
@@ -182,6 +183,7 @@ test("loads custom text configuration, previews source, searches content, and do
     })),
     fs.writeFile(path.join(root, "readme.txt"), "hello searchable world"),
     fs.writeFile(path.join(root, "app.js"), "export function answer() { return 42; }"),
+    fs.writeFile(path.join(root, "SSelect", "notes.md"), "# Select notes"),
   ]);
   const result = await startReaderServer({
     root,
@@ -198,7 +200,7 @@ test("loads custom text configuration, previews source, searches content, and do
 
   const snapshot = await (await fetch(`${baseUrl}/api/snapshot`)).json();
   assert.equal(snapshot.info.name, "源码书架");
-  assert.equal(snapshot.info.documentCount, 2);
+  assert.equal(snapshot.info.documentCount, 3);
   assert.deepEqual(snapshot.info.config.textPreview.extensions, [".js"]);
 
   const text = await (await fetch(
@@ -209,6 +211,15 @@ test("loads custom text configuration, previews source, searches content, and do
 
   const search = await (await fetch(`${baseUrl}/api/search?q=searchable`)).json();
   assert.equal(search.results[0].path, "readme.txt");
+  assert.equal(search.results[0].type, "file");
+
+  const directorySearch = await (await fetch(`${baseUrl}/api/search?q=sselect`)).json();
+  assert.deepEqual(directorySearch.results[0], {
+    type: "directory",
+    path: "SSelect",
+    name: "SSelect",
+    snippet: "目录：SSelect",
+  });
 
   const download = await fetch(
     `${baseUrl}/api/file?path=${encodeURIComponent("app.js")}&download=1`,

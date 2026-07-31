@@ -82,13 +82,23 @@ export interface ReaderConfig {
   warnings: string[];
 }
 
-export interface SearchResult {
+export interface FileSearchResult {
+  type: "file";
   path: string;
   name: string;
-  kind: "markdown" | "text";
+  kind: DocumentKind;
   language?: string;
   snippet: string;
 }
+
+export interface DirectorySearchResult {
+  type: "directory";
+  path: string;
+  name: string;
+  snippet: string;
+}
+
+export type SearchResult = FileSearchResult | DirectorySearchResult;
 
 export interface SearchResponse {
   query: string;

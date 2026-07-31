@@ -35,6 +35,7 @@ import type {
   LibrarySnapshot,
   MarkdownDocument,
   SearchResponse,
+  SearchResult,
   TextDocument,
   TreeNode,
 } from "./types";
@@ -87,6 +88,7 @@ export default function App() {
   const [textDocument, setTextDocument] = useState<TextDocument>();
   const [query, setQuery] = useState("");
   const [searchResponse, setSearchResponse] = useState<SearchResponse>();
+  const [revealedDirectoryPath, setRevealedDirectoryPath] = useState<string>();
   const [searching, setSearching] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -124,6 +126,7 @@ export default function App() {
     documentAbort.current?.abort();
     documentAbort.current = undefined;
     selectedPath.current = file.path;
+    setRevealedDirectoryPath(undefined);
     setSelected(file);
     setMarkdown(undefined);
     setTextDocument(undefined);
@@ -376,6 +379,23 @@ export default function App() {
     if (target) void loadDocument(target);
   }
 
+  function selectSearchResult(result: SearchResult) {
+    if (result.type === "directory") {
+      setQuery("");
+      setSearchResponse(undefined);
+      setRevealedDirectoryPath(result.path);
+      setSidebarOpen(true);
+      return;
+    }
+    void loadDocument({
+      type: "file",
+      path: result.path,
+      name: result.name,
+      kind: result.kind,
+      language: result.language,
+    });
+  }
+
   const isOffice = selected?.kind === "word" || selected?.kind === "powerpoint";
   const officeUrl = selected
     ? `/api/office?path=${encodeURIComponent(selected.path)}`
@@ -471,8 +491,8 @@ export default function App() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索文件名和正文"
-            aria-label="搜索文件名和正文"
+            placeholder="搜索目录、文件名和正文"
+            aria-label="搜索目录、文件名和正文"
           />
           {query && (
             <button onClick={() => setQuery("")} aria-label="清空搜索">
@@ -485,12 +505,13 @@ export default function App() {
             <SearchResults
               response={searchResponse}
               loading={searching}
-              onSelect={(file) => void loadDocument(file)}
+              onSelect={selectSearchResult}
             />
           ) : (
             <LibraryTree
               nodes={tree}
               selectedPath={selected?.path}
+              revealedDirectoryPath={revealedDirectoryPath}
               query={query}
               onSelect={(file) => void loadDocument(file)}
             />

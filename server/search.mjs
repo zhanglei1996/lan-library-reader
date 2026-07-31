@@ -2,13 +2,15 @@ import { LibraryError, readMarkdown, readText } from "./library.mjs";
 
 const indexCache = new WeakMap();
 
-function flattenFiles(nodes) {
-  const files = [];
+function flattenNodes(nodes) {
+  const flattened = [];
   for (const node of nodes) {
-    if (node.type === "file") files.push(node);
-    else files.push(...flattenFiles(node.children));
+    flattened.push(node);
+    if (node.type === "directory") {
+      flattened.push(...flattenNodes(node.children));
+    }
   }
-  return files;
+  return flattened;
 }
 
 function snippetFor(content, normalizedQuery) {
@@ -30,7 +32,9 @@ export async function searchLibrary(
   if (!query) return { query, results: [], indexedFiles: 0, truncated: false };
   if (query.length > 200) throw new LibraryError("搜索内容过长");
   const normalizedQuery = query.toLocaleLowerCase();
-  const candidates = flattenFiles(snapshot.tree)
+  const nodes = flattenNodes(snapshot.tree);
+  const files = nodes.filter((node) => node.type === "file");
+  const candidates = files
     .filter((file) => file.kind === "markdown" || file.kind === "text");
   let indexPromise = indexCache.get(snapshot);
   if (!indexPromise) {
@@ -56,25 +60,51 @@ export async function searchLibrary(
     indexCache.set(snapshot, indexPromise);
   }
   const documents = await indexPromise;
-  const results = [];
+  const matches = new Map();
+  for (const node of nodes) {
+    if (!node.name.toLocaleLowerCase().includes(normalizedQuery)) continue;
+    if (node.type === "directory") {
+      matches.set(node.path, {
+        type: "directory",
+        path: node.path,
+        name: node.name,
+        snippet: `目录：${node.path}`,
+      });
+      continue;
+    }
+    matches.set(node.path, {
+      type: "file",
+      path: node.path,
+      name: node.name,
+      kind: node.kind,
+      language: node.language,
+      snippet: "文件名匹配",
+    });
+  }
+
   for (const { file, content } of documents) {
     const snippet = snippetFor(content, normalizedQuery);
-    const nameMatch = file.name.toLocaleLowerCase().includes(normalizedQuery);
-    if (!snippet && !nameMatch) continue;
-    results.push({
+    if (!snippet) continue;
+    const existing = matches.get(file.path);
+    if (existing) {
+      existing.snippet = snippet;
+      continue;
+    }
+    matches.set(file.path, {
+      type: "file",
       path: file.path,
       name: file.name,
       kind: file.kind,
       language: file.language,
-      snippet: snippet ?? "文件名匹配",
+      snippet,
     });
-    if (results.length >= maxResults) break;
   }
+  const allResults = [...matches.values()];
 
   return {
     query,
-    results,
+    results: allResults.slice(0, maxResults),
     indexedFiles: documents.length,
-    truncated: candidates.length > maxFiles || results.length >= maxResults,
+    truncated: candidates.length > maxFiles || allResults.length > maxResults,
   };
 }

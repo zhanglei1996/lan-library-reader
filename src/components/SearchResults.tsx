@@ -1,5 +1,5 @@
-import { FileSearch } from "lucide-react";
-import type { FileNode, SearchResponse } from "../types";
+import { FileSearch, FolderSearch } from "lucide-react";
+import type { SearchResponse, SearchResult } from "../types";
 
 export default function SearchResults({
   response,
@@ -8,12 +8,12 @@ export default function SearchResults({
 }: {
   response?: SearchResponse;
   loading: boolean;
-  onSelect: (file: FileNode) => void;
+  onSelect: (result: SearchResult) => void;
 }) {
-  if (loading) return <div className="search-state">正在搜索正文…</div>;
+  if (loading) return <div className="search-state">正在搜索…</div>;
   if (!response) return null;
   if (response.results.length === 0) {
-    return <div className="search-state">没有找到正文匹配</div>;
+    return <div className="search-state">没有找到匹配项</div>;
   }
   return (
     <div className="search-results">
@@ -24,15 +24,14 @@ export default function SearchResults({
       {response.results.map((result) => (
         <button
           key={result.path}
-          onClick={() => onSelect({
-            type: "file",
-            path: result.path,
-            name: result.name,
-            kind: result.kind,
-            language: result.language,
-          })}
+          onClick={() => onSelect(result)}
+          title={result.path}
+          data-path={result.path}
+          data-result-type={result.type}
         >
-          <FileSearch aria-hidden="true" />
+          {result.type === "directory"
+            ? <FolderSearch aria-hidden="true" />
+            : <FileSearch aria-hidden="true" />}
           <span>
             <strong>{result.name}</strong>
             <small>{result.snippet}</small>
