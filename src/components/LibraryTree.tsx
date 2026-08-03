@@ -33,6 +33,13 @@ function documentIcon(kind: FileNode["kind"]) {
   return <FileText aria-hidden="true" />;
 }
 
+function ancestorPaths(path: string, includeTarget: boolean) {
+  const parts = path.split("/").filter(Boolean);
+  const length = includeTarget ? parts.length : Math.max(0, parts.length - 1);
+  return Array.from({ length }, (_, index) =>
+    parts.slice(0, index + 1).join("/"));
+}
+
 function TreeItem({
   node,
   level,
@@ -129,33 +136,47 @@ export default function LibraryTree({
   }, [nodes]);
   const [openFolders, setOpenFolders] = useState(initialFolders);
   const treeRef = useRef<HTMLElement>(null);
+  const lastAutoLocatedTarget = useRef("");
 
   useEffect(() => setOpenFolders(initialFolders), [initialFolders]);
 
   useEffect(() => {
-    if (!revealedDirectoryPath) return;
-    const parts = revealedDirectoryPath.split("/");
+    const paths = revealedDirectoryPath
+      ? ancestorPaths(revealedDirectoryPath, true)
+      : selectedPath
+        ? ancestorPaths(selectedPath, false)
+        : [];
+    if (paths.length === 0) return;
     setOpenFolders((current) => {
       const next = new Set(current);
-      for (let index = 0; index < parts.length; index += 1) {
-        next.add(parts.slice(0, index + 1).join("/"));
+      let changed = false;
+      for (const path of paths) {
+        if (next.has(path)) continue;
+        next.add(path);
+        changed = true;
       }
-      return next;
+      return changed ? next : current;
     });
-  }, [revealedDirectoryPath]);
+  }, [initialFolders, revealedDirectoryPath, selectedPath]);
 
   useEffect(() => {
-    if (!revealedDirectoryPath || !openFolders.has(revealedDirectoryPath)) return;
+    const targetPath = revealedDirectoryPath ?? selectedPath;
+    if (!targetPath) return;
+    const targetKey = `${revealedDirectoryPath ? "directory" : "file"}:${targetPath}`;
+    if (lastAutoLocatedTarget.current === targetKey) return;
+    const requiredPaths = ancestorPaths(targetPath, Boolean(revealedDirectoryPath));
+    if (!requiredPaths.every((path) => openFolders.has(path))) return;
     const frame = window.requestAnimationFrame(() => {
       const elements = treeRef.current
         ?.querySelectorAll<HTMLButtonElement>("[data-path]");
       const target = [...(elements ?? [])]
-        .find((element) => element.dataset.path === revealedDirectoryPath);
+        .find((element) => element.dataset.path === targetPath);
       target?.scrollIntoView({ block: "center" });
-      target?.focus({ preventScroll: true });
+      if (revealedDirectoryPath) target?.focus({ preventScroll: true });
+      if (target) lastAutoLocatedTarget.current = targetKey;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [openFolders, revealedDirectoryPath]);
+  }, [openFolders, revealedDirectoryPath, selectedPath]);
 
   function toggleFolder(path: string) {
     setOpenFolders((current) => {

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   BookOpenText,
   Check,
@@ -81,6 +88,8 @@ async function apiError(response: Response, fallback: string) {
   return fallback;
 }
 
+type DocumentNavigationMode = "push" | "replace" | "history";
+
 export default function App() {
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [info, setInfo] = useState<LibraryInfo | null>(null);
@@ -106,7 +115,13 @@ export default function App() {
   const documentAbort = useRef<AbortController | undefined>(undefined);
   const libraryRequest = useRef(0);
   const selectedPath = useRef<string | undefined>(undefined);
+  const treeRef = useRef<TreeNode[]>([]);
   const readerRef = useRef<HTMLElement>(null);
+  const libraryIdentity = useRef<{
+    name: string;
+    readingPosition: boolean;
+  } | undefined>(undefined);
+  const positionSavedBeforeNavigation = useRef(new Set<string>());
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const saved = localStorage.getItem("lan-reader-theme");
     if (saved === "dark" || saved === "light") return saved;
@@ -122,7 +137,27 @@ export default function App() {
     ? files.findIndex((file) => file.path === selected.path)
     : -1;
 
-  const loadDocument = useCallback(async (file: FileNode) => {
+  const saveCurrentReadingPosition = useCallback(() => {
+    const path = selectedPath.current;
+    const identity = libraryIdentity.current;
+    const reader = readerRef.current;
+    if (!path || !identity?.readingPosition || !reader) return;
+    localStorage.setItem(
+      `lan-reader-position:${identity.name}:${path}`,
+      String(reader.scrollTop),
+    );
+    positionSavedBeforeNavigation.current.add(path);
+  }, []);
+
+  const loadDocument = useCallback(async (
+    file: FileNode,
+    navigation: DocumentNavigationMode = "push",
+  ) => {
+    if (navigation === "push" && selectedPath.current === file.path) {
+      setSidebarOpen(false);
+      return;
+    }
+    saveCurrentReadingPosition();
     const requestId = ++documentRequest.current;
     documentAbort.current?.abort();
     documentAbort.current = undefined;
@@ -133,13 +168,19 @@ export default function App() {
     setTextDocument(undefined);
     setError("");
     setSidebarOpen(false);
-    const currentPath = new URLSearchParams(window.location.search).get("doc");
-    const currentHash = currentPath === file.path ? window.location.hash : "";
-    window.history.replaceState(
-      null,
-      "",
-      `?doc=${encodeURIComponent(file.path)}${currentHash}`,
-    );
+    if (navigation !== "history") {
+      const url = new URL(window.location.href);
+      const currentPath = url.searchParams.get("doc");
+      if (currentPath !== file.path) url.hash = "";
+      url.searchParams.set("doc", file.path);
+      const nextLocation = `${url.pathname}${url.search}${url.hash}`;
+      const state = { ...window.history.state, doc: file.path };
+      if (navigation === "push") {
+        window.history.pushState(state, "", nextLocation);
+      } else {
+        window.history.replaceState(state, "", nextLocation);
+      }
+    }
 
     if (file.kind === "markdown" || file.kind === "text") {
       const controller = new AbortController();
@@ -167,8 +208,7 @@ export default function App() {
         if (documentAbort.current === controller) documentAbort.current = undefined;
       }
     }
-    readerRef.current?.scrollTo({ top: 0, behavior: "instant" });
-  }, []);
+  }, [saveCurrentReadingPosition]);
 
   const loadLibrary = useCallback(async (
     keepSelection = true,
@@ -190,6 +230,7 @@ export default function App() {
       if (requestId !== libraryRequest.current) return;
       const nextTree = snapshot.tree;
       const nextInfo = snapshot.info;
+      treeRef.current = nextTree;
       setTree(nextTree);
       setInfo(nextInfo);
       if (nextInfo.config.features.readingPosition) {
@@ -211,13 +252,17 @@ export default function App() {
         (currentPath && findFile(nextTree, currentPath))
         || (requestedPath && findFile(nextTree, requestedPath))
         || firstFile(nextTree);
-      if (nextFile) await loadDocument(nextFile);
+      if (nextFile) await loadDocument(nextFile, "replace");
       else {
         selectedPath.current = undefined;
         setSelected(undefined);
         setMarkdown(undefined);
         setTextDocument(undefined);
       }
+      libraryIdentity.current = {
+        name: nextInfo.name,
+        readingPosition: nextInfo.config.features.readingPosition,
+      };
     } catch (reason) {
       if (requestId !== libraryRequest.current) return;
       setError(reason instanceof Error ? reason.message : "无法读取书架");
@@ -225,6 +270,22 @@ export default function App() {
       if (requestId === libraryRequest.current) setLoading(false);
     }
   }, [loadDocument]);
+
+  useEffect(() => {
+    const restoreHistoryDocument = () => {
+      const path = new URLSearchParams(window.location.search).get("doc");
+      if (!path || path === selectedPath.current) return;
+      const file = findFile(treeRef.current, path);
+      if (file) {
+        void loadDocument(file, "history");
+        return;
+      }
+      // The shelf may have changed since this history entry was created.
+      void loadLibrary(false);
+    };
+    window.addEventListener("popstate", restoreHistoryDocument);
+    return () => window.removeEventListener("popstate", restoreHistoryDocument);
+  }, [loadDocument, loadLibrary]);
 
   useEffect(() => {
     void (async () => {
@@ -304,7 +365,7 @@ export default function App() {
     };
   }, [info?.config.features.fullTextSearch, query]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!selected || !info?.config.features.readingPosition) return undefined;
     if (selected.kind === "markdown" && !markdown) return undefined;
     if (selected.kind === "text" && !textDocument) return undefined;
@@ -313,8 +374,10 @@ export default function App() {
     const key = `lan-reader-position:${info.name}:${selected.path}`;
     const saved = Number(localStorage.getItem(key));
     const restoreTimer = window.setTimeout(() => {
-      if (!window.location.hash && Number.isFinite(saved) && saved > 0) {
-        reader.scrollTo({ top: saved });
+      if (!window.location.hash) {
+        reader.scrollTo({
+          top: Number.isFinite(saved) && saved > 0 ? saved : 0,
+        });
       }
     }, 80);
     let saveTimer = 0;
@@ -328,7 +391,9 @@ export default function App() {
     return () => {
       window.clearTimeout(restoreTimer);
       window.clearTimeout(saveTimer);
-      localStorage.setItem(key, String(reader.scrollTop));
+      if (!positionSavedBeforeNavigation.current.delete(selected.path)) {
+        localStorage.setItem(key, String(reader.scrollTop));
+      }
       reader.removeEventListener("scroll", save);
     };
   }, [
@@ -339,6 +404,11 @@ export default function App() {
     selected?.path,
     textDocument?.modifiedAt,
   ]);
+
+  useLayoutEffect(() => {
+    if (!selected || info?.config.features.readingPosition) return;
+    readerRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  }, [info?.config.features.readingPosition, selected?.path]);
 
   async function copyValue(value: string, successMessage: string) {
     if (value.length > 2 * 1024 * 1024 && !window.confirm("内容较大，复制可能需要一些时间。继续吗？")) {
@@ -372,6 +442,7 @@ export default function App() {
   }
 
   async function logout() {
+    saveCurrentReadingPosition();
     libraryRequest.current += 1;
     documentRequest.current += 1;
     documentAbort.current?.abort();
@@ -381,6 +452,7 @@ export default function App() {
     setInfo(null);
     setTree([]);
     setSelected(undefined);
+    libraryIdentity.current = undefined;
   }
 
   function navigateBy(offset: number) {
