@@ -1,4 +1,10 @@
-export type DocumentKind = "markdown" | "text" | "pdf" | "word" | "powerpoint";
+export type DocumentKind =
+  | "markdown"
+  | "text"
+  | "pdf"
+  | "word"
+  | "powerpoint"
+  | "image";
 
 export interface FileNode {
   type: "file";

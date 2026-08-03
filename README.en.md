@@ -74,7 +74,7 @@ This stops only LAN Reader services on the current computer. It does not delete 
 - Responsive layout for desktop, phone, and tablet
 - Markdown headings, tables, task lists, footnotes, math, callouts, syntax highlighting, Mermaid, and relative links
 - Mermaid viewer with click-to-expand, 50%–400% zoom, keyboard controls, smooth Mac trackpad/wheel zoom, and fullscreen mode
-- Image zoom, fullscreen viewing, and original-image access
+- Standalone images in the bookshelf with zoom, fullscreen viewing, and original-image access
 - Built-in TXT preview; configurable source/text extensions with syntax highlighting, line numbers, and wrapping
 - Embedded PDF preview with zoom and byte-range requests
 - Optional Word and PowerPoint preview through LibreOffice PDF conversion
@@ -100,7 +100,7 @@ This stops only LAN Reader services on the current computer. It does not delete 
 | PDF | `.pdf` | Embedded browser viewer |
 | Word | `.doc` `.docx` | Converted to PDF by LibreOffice |
 | PowerPoint | `.ppt` `.pptx` | Converted to PDF by LibreOffice |
-| Markdown images | PNG, JPEG, GIF, WebP, AVIF, BMP, SVG | Loaded from relative paths |
+| Images | `.png` `.jpg` `.jpeg` `.gif` `.webp` `.avif` `.bmp` `.svg` `.ico` | Direct preview, zoom, fullscreen, and original-image access |
 
 Markdown, TXT, and PDF work without LibreOffice. Word and PowerPoint files still appear in the tree when LibreOffice is unavailable and can be downloaded in their original format.
 
@@ -135,14 +135,14 @@ Markdown files larger than approximately 64 KB are split at safe boundaries and 
 
 The starting folder does not need to contain a Markdown file. LAN Reader recursively looks for supported documents:
 
-- By default, it includes Markdown, TXT, PDF, Word, and PowerPoint files at any depth.
+- By default, it includes Markdown, TXT, PDF, Word, PowerPoint, and common image files at any depth.
 - Other file types are not included and do not count toward the bookshelf limit unless configured in `.lan-reader.json`.
 - Only directory branches containing supported documents are kept.
 - Empty directories and directories containing only unsupported files are hidden.
 - Hidden files, hidden directories, symbolic links, and common build directories are skipped: `node_modules`, `target`, `dist`, `build`, `out`, `coverage`, `vendor`, `bower_components`, and `__pycache__`.
-- Standalone images are not shown in the tree; they are loaded when referenced by Markdown.
+- Standalone images are shown in the tree, and relative images referenced by Markdown continue to load normally.
 - A bookshelf can contain up to 20,000 default or explicitly configured documents.
-- A separate traversal safety limit of 250,000 files and directories prevents accidentally scanning an entire large disk. Unconfigured source files and images may be visited while searching, but do not count as bookshelf documents.
+- A separate traversal safety limit of 250,000 files and directories prevents accidentally scanning an entire large disk. Unconfigured source files may be visited while searching, but do not count as bookshelf documents.
 - If a subdirectory temporarily disappears or cannot be read, LAN Reader skips it and continues scanning the rest of the bookshelf.
 
 If no supported document is found, the service still starts with an empty bookshelf.
@@ -228,7 +228,7 @@ You can omit groups and fields that do not need customization. For example, to a
 
 - The file must be valid JSON with no comments or trailing commas, and must not exceed 256 KB.
 - Custom extensions must start with `.`, are case-insensitive, and are deduplicated.
-- Markdown, TXT, PDF, Word, and PowerPoint are already supported and do not need to be configured again.
+- Markdown, TXT, PDF, Word, PowerPoint, and common images are already supported and do not need to be configured again.
 - Custom extensions are read only as safe text. Code, HTML, and JavaScript are never executed.
 - Text decoding supports UTF-8, UTF-8 BOM, and GB18030/GBK.
 - Unknown fields are ignored and shown as configuration warnings in the page footer.

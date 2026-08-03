@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import LibraryTree from "./components/LibraryTree";
+import ImageReader from "./components/ImageReader";
 import LoginPage from "./components/LoginPage";
 import MarkdownReader from "./components/MarkdownReader";
 import PdfReader from "./components/PdfReader";
@@ -675,6 +676,9 @@ export default function App() {
           )}
           {selected?.kind === "pdf" && (
             <PdfReader url={fileUrl(selected.path)} name={selected.name} />
+          )}
+          {selected?.kind === "image" && (
+            <ImageReader url={fileUrl(selected.path)} name={selected.name} />
           )}
           {isOffice && info?.capabilities.officePreview && (
             <PdfReader url={officeUrl} name={selected.name} />

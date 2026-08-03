@@ -16,6 +16,15 @@ const RESERVED_EXTENSIONS = new Set([
   ".ppt",
   ".pptx",
   ".txt",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".avif",
+  ".bmp",
+  ".svg",
+  ".ico",
 ]);
 const KNOWN_TOP_LEVEL_KEYS = new Set(["version", "title", "textPreview", "features"]);
 const KNOWN_TEXT_KEYS = new Set([

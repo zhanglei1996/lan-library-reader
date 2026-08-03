@@ -11,6 +11,15 @@ const KIND_BY_EXTENSION = new Map([
   [".ppt", "powerpoint"],
   [".pptx", "powerpoint"],
   [".txt", "text"],
+  [".png", "image"],
+  [".jpg", "image"],
+  [".jpeg", "image"],
+  [".gif", "image"],
+  [".webp", "image"],
+  [".avif", "image"],
+  [".bmp", "image"],
+  [".svg", "image"],
+  [".ico", "image"],
 ]);
 
 const LANGUAGE_BY_EXTENSION = new Map([

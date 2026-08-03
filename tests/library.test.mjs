@@ -23,6 +23,7 @@ async function createFixture() {
     fs.writeFile(path.join(root, "章节", "02-进阶.markdown"), "# 进阶"),
     fs.writeFile(path.join(root, "讲义.pdf"), "%PDF-1.4\n"),
     fs.writeFile(path.join(root, "演示.pptx"), "placeholder"),
+    fs.writeFile(path.join(root, "线路.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47])),
     fs.writeFile(path.join(root, "忽略.txt"), "not listed"),
     fs.writeFile(path.join(root, ".secret.md"), "hidden"),
     fs.writeFile(outside, "outside"),
@@ -38,15 +39,16 @@ test("builds a naturally sorted document tree and ignores hidden or linked files
   const { tree, documentCount } = await buildLibraryTree(library);
 
   assert.equal(library.name, "我的学习笔记");
-  assert.equal(documentCount, 5);
+  assert.equal(documentCount, 6);
   assert.deepEqual(
     tree.map((node) => node.name),
-    ["章节", "忽略.txt", "讲义.pdf", "开始.md", "演示.pptx"],
+    ["章节", "忽略.txt", "讲义.pdf", "开始.md", "线路.png", "演示.pptx"],
   );
   assert.equal(tree[0].children[0].kind, "markdown");
   assert.equal(JSON.stringify(tree).includes(".secret"), false);
   assert.equal(JSON.stringify(tree).includes("外部链接"), false);
   assert.equal(tree.find((node) => node.name === "忽略.txt").kind, "text");
+  assert.equal(tree.find((node) => node.name === "线路.png").kind, "image");
 });
 
 test("finds supported documents deeply even when the root has no Markdown", async (t) => {

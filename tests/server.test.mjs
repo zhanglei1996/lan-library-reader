@@ -15,6 +15,7 @@ async function startFixtureServer(t, converter = { id: "none", available: false 
     fs.writeFile(path.join(root, "阅读.md"), "# 阅读\n\n只读服务。"),
     createMinimalPdf(path.join(root, "资料.pdf"), "PDF fixture"),
     fs.writeFile(path.join(root, "课程.docx"), "office"),
+    fs.writeFile(path.join(root, "封面.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47])),
     fs.writeFile(path.join(root, ".token"), "do not expose"),
   ]);
 
@@ -96,12 +97,12 @@ test("serves library metadata, tree, and Markdown without exposing the root path
   assert.equal(infoResponse.status, 200);
   const info = await infoResponse.json();
   assert.equal(info.name, "书架");
-  assert.equal(info.documentCount, 3);
+  assert.equal(info.documentCount, 4);
   assert.equal(info.capabilities.officePreview, false);
   assert.equal(JSON.stringify(info).includes(fixture.root), false);
 
   const tree = await treeResponse.json();
-  assert.equal(tree.length, 3);
+  assert.equal(tree.length, 4);
   assert.equal((await markdownResponse.json()).content, "# 阅读\n\n只读服务。");
   assert.equal(markdownResponse.headers.get("x-content-type-options"), "nosniff");
   assert.match(markdownResponse.headers.get("content-security-policy"), /default-src 'self'/);
@@ -114,10 +115,10 @@ test("serves a complete library snapshot from one endpoint", async (t) => {
 
   assert.equal(response.status, 200);
   assert.equal(snapshot.info.name, "书架");
-  assert.equal(snapshot.info.documentCount, 3);
-  assert.equal(snapshot.tree.length, 3);
-  assert.equal(snapshot.info.scan.scannedEntries, 3);
-  assert.ok(snapshot.info.scan.visitedEntries >= 3);
+  assert.equal(snapshot.info.documentCount, 4);
+  assert.equal(snapshot.tree.length, 4);
+  assert.equal(snapshot.info.scan.scannedEntries, 4);
+  assert.ok(snapshot.info.scan.visitedEntries >= 4);
   assert.equal(JSON.stringify(snapshot).includes(fixture.root), false);
 });
 
@@ -168,6 +169,21 @@ test("supports PDF byte ranges used by browser viewers", async (t) => {
   assert.equal(await response.text(), "%PDF-1.4");
   assert.equal(suffixResponse.status, 206);
   assert.equal((await suffixResponse.arrayBuffer()).byteLength, 4);
+});
+
+test("serves standalone images inline with the correct media type", async (t) => {
+  const fixture = await startFixtureServer(t);
+  const response = await fetch(
+    `${fixture.baseUrl}/api/file?path=${encodeURIComponent("封面.png")}`,
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "image/png");
+  assert.match(response.headers.get("content-disposition"), /^inline;/);
+  assert.deepEqual(
+    new Uint8Array(await response.arrayBuffer()),
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+  );
 });
 
 test("loads custom text configuration, previews source, searches content, and downloads", async (t) => {

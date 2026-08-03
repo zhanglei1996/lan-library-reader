@@ -27,7 +27,7 @@ test("normalizes custom text extensions and reports unknown keys", async (t) => 
     version: 1,
     title: " Source Shelf ",
     textPreview: {
-      extensions: [".JS", ".js", ".sql", ".md"],
+      extensions: [".JS", ".js", ".sql", ".md", ".png"],
       maxBytes: 4096,
       extra: true,
     },

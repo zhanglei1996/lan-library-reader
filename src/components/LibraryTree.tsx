@@ -5,6 +5,7 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  Image as ImageIcon,
   Presentation,
   ScrollText,
 } from "lucide-react";
@@ -28,6 +29,7 @@ function containsMatch(node: TreeNode, query: string): boolean {
 function documentIcon(kind: FileNode["kind"]) {
   if (kind === "word") return <ScrollText aria-hidden="true" />;
   if (kind === "powerpoint") return <Presentation aria-hidden="true" />;
+  if (kind === "image") return <ImageIcon aria-hidden="true" />;
   return <FileText aria-hidden="true" />;
 }
 

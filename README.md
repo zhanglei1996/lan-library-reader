@@ -74,7 +74,7 @@ lan-reader stop
 - 响应式布局：适配电脑、手机和平板
 - Markdown：标题、表格、任务列表、脚注、数学公式、提示块、代码高亮、Mermaid 和相对链接
 - Mermaid 阅读：点击放大、50%–400% 缩放、快捷键、Mac 触控板/滚轮平滑缩放和全屏查看
-- 图片阅读：点击放大、缩放、全屏和打开原图
+- 图片阅读：独立图片直接进入书架，支持点击放大、缩放、全屏和打开原图
 - 文本与源码：TXT 默认可用，其他扩展名可配置，支持语法高亮、行号和换行
 - PDF：浏览器内嵌预览、缩放和字节范围请求
 - Word/PPT：通过可选的 LibreOffice 转换为 PDF 预览
@@ -99,7 +99,7 @@ lan-reader stop
 | PDF | `.pdf` | 浏览器内嵌 |
 | Word | `.doc` `.docx` | LibreOffice 转 PDF |
 | PowerPoint | `.ppt` `.pptx` | LibreOffice 转 PDF |
-| Markdown 图片 | PNG、JPEG、GIF、WebP、AVIF、BMP、SVG | 按相对路径加载 |
+| 图片 | `.png` `.jpg` `.jpeg` `.gif` `.webp` `.avif` `.bmp` `.svg` `.ico` | 直接预览、缩放、全屏和原图查看 |
 
 没有安装 LibreOffice 时，Markdown、TXT 和 PDF 不受影响。Word 和 PowerPoint 文件仍会显示在目录中，并提供原文件下载。
 
@@ -134,14 +134,14 @@ $$
 
 启动目录不要求包含 Markdown。LAN Reader 会递归遍历子文件夹，查找所有支持的文档：
 
-- 默认只收录深层目录中的 Markdown、TXT、PDF、Word 和 PowerPoint
+- 默认只收录深层目录中的 Markdown、TXT、PDF、Word、PowerPoint 和常见图片
 - 其他类型默认不会收录，也不会占用书架的文档数量上限；通过 `.lan-reader.json` 配置后才会收录
 - 只保留包含支持文档的目录分支
 - 空目录和只有不支持文件的目录不会显示
 - 跳过隐藏文件、隐藏目录、符号链接，以及常见构建目录：`node_modules`、`target`、`dist`、`build`、`out`、`coverage`、`vendor`、`bower_components`、`__pycache__`
-- 单独的图片不会出现在目录中，只在 Markdown 引用时加载
+- 独立图片会显示在目录中；Markdown 中的相对图片也会正常加载
 - 书架最多收录 20,000 篇默认支持或主动配置的文档
-- 为避免误扫超大型磁盘目录，内部另有 250,000 个文件和文件夹的遍历安全上限；未配置的源码、图片等只参与查找，不计入书架文档数量
+- 为避免误扫超大型磁盘目录，内部另有 250,000 个文件和文件夹的遍历安全上限；未配置的源码等只参与查找，不计入书架文档数量
 - 某个子目录临时消失或无权读取时，会跳过该目录，不影响其余书架
 
 如果整个目录都没有支持的文档，服务仍会启动，但书架目录为空。
@@ -227,7 +227,7 @@ TXT 已默认支持。要预览 JavaScript、TypeScript、Java、SQL、日志等
 
 - 文件必须是合法 JSON，不能包含注释或末尾多余逗号，最大为 256 KB
 - 自定义扩展名必须以 `.` 开头，不区分大小写；重复项会自动合并
-- Markdown、TXT、PDF、Word 和 PowerPoint 已默认支持，不需要重复配置
+- Markdown、TXT、PDF、Word、PowerPoint 和常见图片已默认支持，不需要重复配置
 - 自定义扩展名只会按安全纯文本读取；代码、HTML 和 JavaScript 都不会执行
 - 文本支持 UTF-8、UTF-8 BOM 和 GB18030/GBK 中文编码
 - 不认识的字段会被忽略，并在页面底部显示配置警告
