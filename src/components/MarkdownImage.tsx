@@ -12,6 +12,8 @@ import {
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.25;
+const WHEEL_ZOOM_SENSITIVITY = 0.003;
+const MAX_WHEEL_DELTA = 24;
 
 export default function MarkdownImage({
   src,
@@ -45,24 +47,48 @@ export default function MarkdownImage({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
       else if (event.key === "+" || event.key === "=") {
-        changeZoom(zoom + ZOOM_STEP);
+        event.preventDefault();
+        setZoom((current) => Math.min(MAX_ZOOM, current + ZOOM_STEP));
       } else if (event.key === "-") {
-        changeZoom(zoom - ZOOM_STEP);
+        event.preventDefault();
+        setZoom((current) => Math.max(MIN_ZOOM, current - ZOOM_STEP));
       } else if (event.key === "0") {
+        event.preventDefault();
         setZoom(1);
       }
     };
     const onFullscreenChange = () => {
       setFullscreen(document.fullscreenElement === dialogRef.current);
     };
+    const dialog = dialogRef.current;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const modeMultiplier = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 100 : 1;
+      const normalizedDelta = event.deltaY * modeMultiplier;
+      const limitedDelta = Math.min(
+        MAX_WHEEL_DELTA,
+        Math.max(-MAX_WHEEL_DELTA, normalizedDelta),
+      );
+      setZoom((current) => {
+        const next = current * Math.exp(-limitedDelta * WHEEL_ZOOM_SENSITIVITY);
+        const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
+        return Math.round(clamped * 1000) / 1000;
+      });
+    };
     window.addEventListener("keydown", onKeyDown);
     document.addEventListener("fullscreenchange", onFullscreenChange);
+    dialog?.addEventListener("wheel", onWheel, { passive: false, capture: true });
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("fullscreenchange", onFullscreenChange);
+      dialog?.removeEventListener("wheel", onWheel, { capture: true });
     };
-  }, [open, zoom]);
+  }, [open]);
 
   const lightbox = open
     ? createPortal(

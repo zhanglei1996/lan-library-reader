@@ -132,7 +132,13 @@ export default function App() {
     setTextDocument(undefined);
     setError("");
     setSidebarOpen(false);
-    window.history.replaceState(null, "", `?doc=${encodeURIComponent(file.path)}`);
+    const currentPath = new URLSearchParams(window.location.search).get("doc");
+    const currentHash = currentPath === file.path ? window.location.hash : "";
+    window.history.replaceState(
+      null,
+      "",
+      `?doc=${encodeURIComponent(file.path)}${currentHash}`,
+    );
 
     if (file.kind === "markdown" || file.kind === "text") {
       const controller = new AbortController();
@@ -306,7 +312,9 @@ export default function App() {
     const key = `lan-reader-position:${info.name}:${selected.path}`;
     const saved = Number(localStorage.getItem(key));
     const restoreTimer = window.setTimeout(() => {
-      if (Number.isFinite(saved) && saved > 0) reader.scrollTo({ top: saved });
+      if (!window.location.hash && Number.isFinite(saved) && saved > 0) {
+        reader.scrollTo({ top: saved });
+      }
     }, 80);
     let saveTimer = 0;
     const save = () => {

@@ -73,6 +73,7 @@ This stops only LAN Reader services on the current computer. It does not delete 
 - Book-like reading interface with a file tree, article view, and page outline
 - Responsive layout for desktop, phone, and tablet
 - Markdown headings, tables, task lists, footnotes, math, callouts, syntax highlighting, Mermaid, and relative links
+- Mermaid viewer with click-to-expand, 50%–400% zoom, keyboard controls, smooth Mac trackpad/wheel zoom, and fullscreen mode
 - Image zoom, fullscreen viewing, and original-image access
 - Built-in TXT preview; configurable source/text extensions with syntax highlighting, line numbers, and wrapping
 - Embedded PDF preview with zoom and byte-range requests

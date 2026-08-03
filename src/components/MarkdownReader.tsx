@@ -1,4 +1,4 @@
-import { isValidElement, useEffect, useMemo, useState } from "react";
+import { isValidElement, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
@@ -12,6 +12,7 @@ import {
   ensureHighlightLanguage,
   highlightedCode,
 } from "../lib/highlight";
+import { parseSafeHtmlAnchor } from "../lib/markdownHtml";
 import { createMarkdownSegments } from "../lib/markdownSegments";
 import { fileUrl, resolveRelativePath } from "../lib/path";
 import type { Heading, MarkdownDocument } from "../types";
@@ -65,16 +66,39 @@ function remarkNormalizeRawHtml() {
   return (tree: MarkdownAstNode) => {
     function normalize(node: MarkdownAstNode) {
       if (!node.children) return;
-      node.children = node.children.filter((child) => {
+      const normalizedChildren: MarkdownAstNode[] = [];
+      for (let index = 0; index < node.children.length; index += 1) {
+        const child = node.children[index];
         if (child.type === "html") {
           const value = child.value?.trim() ?? "";
-          if (/^<!--[\s\S]*-->$/.test(value)) return false;
-          child.type = node.type === "root" ? "code" : "inlineCode";
-          child.value = value;
+          if (/^<!--[\s\S]*-->$/.test(value)) continue;
+          const next = node.children[index + 1];
+          const pairedValue = next?.type === "html"
+            ? `${value}${next.value?.trim() ?? ""}`
+            : value;
+          const anchorId = parseSafeHtmlAnchor(pairedValue)
+            ?? parseSafeHtmlAnchor(value);
+          if (anchorId) {
+            child.type = "text";
+            child.value = "";
+            child.data = {
+              hName: "span",
+              hProperties: {
+                id: anchorId,
+                className: ["markdown-anchor"],
+                "aria-hidden": "true",
+              },
+            };
+            if (pairedValue !== value) index += 1;
+          } else {
+            child.type = node.type === "root" ? "code" : "inlineCode";
+            child.value = value;
+          }
         }
         normalize(child);
-        return true;
-      });
+        normalizedChildren.push(child);
+      }
+      node.children = normalizedChildren;
     }
     normalize(tree);
   };
@@ -223,6 +247,7 @@ export default function MarkdownReader({
   const [visibleSegments, setVisibleSegments] = useState(
     Math.min(2, segments.length),
   );
+  const restoredHashRef = useRef("");
   useEffect(() => {
     if (visibleSegments >= segments.length) return;
     const renderMore = () => {
@@ -242,6 +267,26 @@ export default function MarkdownReader({
     const id = window.setTimeout(renderMore, 32);
     return () => window.clearTimeout(id);
   }, [segments.length, visibleSegments]);
+
+  useEffect(() => {
+    const encodedHash = window.location.hash.slice(1);
+    if (!encodedHash) return;
+    let hash = encodedHash;
+    try {
+      hash = decodeURIComponent(encodedHash);
+    } catch {
+      // Keep the original hash when it contains malformed escape sequences.
+    }
+    const restoreKey = `${document.path}#${hash}`;
+    if (restoredHashRef.current === restoreKey) return;
+    const animationFrame = window.requestAnimationFrame(() => {
+      const target = window.document.getElementById(hash);
+      if (!target) return;
+      target.scrollIntoView();
+      restoredHashRef.current = restoreKey;
+    });
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [document.path, visibleSegments]);
 
   const components = useMemo(
     () => ({
